@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Grid.h"
-#include "PriorityQueueUnique.h"
 #include "GameFramework/Actor.h"
 #include "GridManager.generated.h"
 
@@ -12,7 +11,7 @@ UCLASS()
 class AGridManager : public AActor
 {
 	GENERATED_BODY()
-
+	
 	struct FGridStatus
 	{
 	private:
@@ -26,6 +25,11 @@ class AGridManager : public AActor
 		TBitArray<> m_ValidGridRotationList;
 		
 	public:
+		FGridStatus()
+			:m_GridLocation(FIntPoint()),m_RotationNums(0),m_GridTypeNums(0)
+		{}
+		
+		
 		FGridStatus(FIntPoint GridLocation,int32 GridTypeNums,int32 RotationNums)
 			:m_GridLocation(GridLocation),m_RotationNums(RotationNums),m_GridTypeNums(GridTypeNums)
 		{
@@ -33,14 +37,14 @@ class AGridManager : public AActor
 			m_ValidGridRotationList.Init(true,m_RotationNums * m_GridTypeNums);
 		}
 
-		bool CheckComplete() const
+		bool IsCompleted() const
 		{
 			return m_IsComplete;
 		}
 
-		void SetIsComplete()
+		void SetIsCompleted(bool IsCompleted)
 		{
-			m_IsComplete = true;
+			m_IsComplete = IsCompleted;
 		}
 		
 		bool operator==(const FGridStatus& Other) const
@@ -50,8 +54,8 @@ class AGridManager : public AActor
 
 		friend uint32 GetTypeHash(const FGridStatus& Status)
 		{
-			uint32 Hash = GetTypeHash(Status.m_GridLocation);
-			return Hash;
+			return GetTypeHash(Status.m_GridLocation);
+
 		}
 		
 		bool IsValidGrid(const int32 GridTypeIndex)
@@ -85,6 +89,55 @@ class AGridManager : public AActor
 		{
 			return m_GridLocation;
 		}
+
+		int32 GetValidGridNum() const
+		{
+			return m_ValidGridList.CountSetBits();
+		}
+
+		int32 GetValidGridWithRotationNum() const
+		{
+			return m_ValidGridRotationList.CountSetBits();
+		}
+
+		void GetRotatorByGridRotation(int32 GridRotation,FRotator& OutRotator) const
+		{
+			check(GridRotation >= 0 && GridRotation < m_RotationNums)
+				
+			switch(GridRotation)
+			{
+				case 0: OutRotator = FRotator(0, 0, 0);
+					break;
+				case 1: OutRotator = FRotator(0, 90, 0);
+					break;
+				case 2: OutRotator = FRotator(0, 180, 0);
+					break;
+				case 3: OutRotator = FRotator(0, 270, 0);
+					break;
+				default: OutRotator = FRotator::ZeroRotator;	
+			}
+		}
+
+		bool GetGridWithRotationByValidIndex(int32 Index,int32& GridIndex,int32& GridRotation) const
+		{
+			if(Index < 0 || Index >= GetValidGridWithRotationNum())
+			{
+				return false;
+			}
+			int32 TargetIndex = 0;
+			for(TConstSetBitIterator<> It(m_ValidGridRotationList);It;++It)
+			{
+				if(Index==0)
+				{
+					TargetIndex = It.GetIndex();
+				}
+				Index--;
+			}
+
+			GridIndex = TargetIndex/m_RotationNums;
+			GridRotation = TargetIndex-GridIndex*m_RotationNums;
+			return true;
+		}
 		
 		struct FStatusPriorityComparator
 		{
@@ -114,12 +167,12 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	UFUNCTION(BlueprintCallable,Category = "Grid")
-	void GenerateGrid();
+	void GenerateGrid(int32 Seed);
 
-	UPROPERTY(VisibleAnywhere,BlueprintReadWrite,Category = "Grid Settings")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
 	int32 Rows = 5;
 
-	UPROPERTY(VisibleAnywhere,BlueprintReadWrite,Category = "Grid Settings")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
 	int32 Columns = 5;
 
 	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
@@ -130,10 +183,10 @@ public:
 
 private:
 	void InitGridStatuses();
+
+	int32 GetArrayIndexFromGridLocation(const FIntPoint GridLocation) const;
 	
 private:
 	TArray<AGrid*> Grids;
 	TArray<FGridStatus> GridStatuses;
-
-	TPriorityQueueUnique<FGridStatus,int32,FGridStatus::FStatusPriorityComparator> GridStatusesPriorityQueueUnique;
 };

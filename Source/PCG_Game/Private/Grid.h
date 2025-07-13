@@ -2,16 +2,22 @@
 
 #pragma once
 
-UENUM(BlueprintType)
-enum class EGridSlot : uint8
-{
-	Valid = 0,
-	Invalid = 1,
-};
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Grid.generated.h"
+
+
+UENUM(BlueprintType,Meta = (Bitflags))
+enum class EGridSlot : uint8
+{
+	// 允许为空
+	AllowEmpty = 0,
+	// 允许有物体
+	Allow = 1 << 0,
+	// 允许全连接
+	FullConnect = 1 << 1
+};
+
 UCLASS()
 class AGrid : public AActor
 {
@@ -44,10 +50,11 @@ public:
 	// UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
 	// EGridSlot Z_Backward;
 
-	bool IsXForwardValid() const {return this->X_Forward == EGridSlot::Valid;}
-	bool IsXBackwardValid() const {return this->X_Backward == EGridSlot::Valid;}
-	bool IsYForwardValid() const {return this->Y_Forward == EGridSlot::Valid;}
-	bool IsYBackwardValid() const {return this->Y_Backward == EGridSlot::Valid;}
-	//bool IsZForwardValid() const {return this->Z_Forward == EGridSlot::Valid;}
-	//bool IsZBackwardValid() const {return this->Z_Backward == EGridSlot::Valid;}
+	EGridSlot GetXForwardSlot() const {return this->X_Forward;}
+	EGridSlot GetXBackwardSlot() const {return this->X_Forward;}
+	EGridSlot GetYForwardSlot() const {return this->X_Forward;}
+	EGridSlot GetYBackwardSlot() const {return this->X_Forward;}
+	// EGridSlot GetXForwardSlot() const {return this->X_Forward;}
+	// EGridSlot GetXForwardSlot() const {return this->X_Forward;}
+
 };

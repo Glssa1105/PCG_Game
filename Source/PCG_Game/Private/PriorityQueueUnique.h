@@ -28,11 +28,11 @@ public:
 		:Comparator(InComparator)
 	{}
 
-	void Enqueue(const T& Element,PriorityType Priority)
+	void Enqueue(const T& Element,const PriorityType& Priority)
 	{
-		if (int32* IndexPtr = ElementToIndexMap.Find(Element))
+		if (ElementToIndexMap.Contains(Element))
 		{
-			UpdatePriority(*IndexPtr,Priority);
+			UpdatePriority(Element,Priority);
 		}
 		else
 		{
@@ -121,7 +121,7 @@ private:
 		const int32 LastIndex = Heap.Num()-1;
 		if (Index != LastIndex)
 		{
-			SwapElements(Heap[Index],Heap[LastIndex]);
+			SwapElements(Index,LastIndex);
 		}
 
 		Heap.RemoveAt(LastIndex);
@@ -129,13 +129,13 @@ private:
 
 		if (Index < Heap.Num())
 		{
-			if (Index > 0 && Comparator(Heap[Index],Heap[Parent(Index)]))
+			if (Index > 0 && Comparator(Heap[Index].Priority,Heap[Parent(Index)].Priority))
 			{
 				BubbleUp(Index);
 			}
 			else
 			{
-				BubbleUp(Index);
+				BubbleDown(Index);
 			}
 		}
 	}
@@ -157,7 +157,7 @@ private:
 		{
 			int32 ParentIndex = Parent(Index);
 
-			if (Comparator(Heap[Index],Heap[ParentIndex]))
+			if (Comparator(Heap[Index].Priority,Heap[ParentIndex].Priority))
 			{
 				SwapElements(Index,ParentIndex);
 				Index = ParentIndex;
@@ -178,12 +178,12 @@ private:
 			int32 LeftChild = Left(Index);
 			int32 RightChild = Right(Index);
 
-			if (LeftChild < NumElements && Comparator(Heap[LeftChild],Heap[SmallestChild]))
+			if (LeftChild < NumElements && Comparator(Heap[LeftChild].Priority,Heap[SmallestChild].Priority))
 			{
 				SmallestChild = LeftChild;
 			}
 
-			if (RightChild < NumElements && Comparator(Heap[RightChild],Heap[SmallestChild]))
+			if (RightChild < NumElements && Comparator(Heap[RightChild].Priority,Heap[SmallestChild].Priority))
 			{
 				SmallestChild = RightChild;
 			}
@@ -204,4 +204,94 @@ private:
 	int32 Parent(int32 Index) const {return (Index-1)/2;}
 	int32 Left(int32 Index) const {return 2*Index+1;}
 	int32 Right(int32 Index) const {return 2*Index+2;}
+
+
+	static void Test()
+	{
+		TPriorityQueueUnique<FString, int32> BasicOperationTestQueue;
+		TArray<TPair<FString, int32>> TestData = {
+			{"Apple", 5},
+			{"Banana", 3},
+			{"Cherry", 7}
+		};
+
+		for (const auto& Data : TestData)
+		{
+			BasicOperationTestQueue.Enqueue(Data.Key, Data.Value);
+		}
+
+		if (BasicOperationTestQueue.Num() != 3)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicOperationTest 1 Failed"));
+			return;
+		}
+
+		if(!BasicOperationTestQueue.Contains("Banana") ||
+			!BasicOperationTestQueue.Contains("Apple") ||
+			!BasicOperationTestQueue.Contains("Cherry"))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicOperationTest 2 Failed"));
+			return;
+		}
+
+
+		FString Item;
+		int32 Priority;
+		BasicOperationTestQueue.Dequeue(Item, Priority);
+		if (Item != "Banana" || Priority != 3)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicOperationTest 3 Failed"));
+			return;
+		}
+
+		BasicOperationTestQueue.Dequeue(Item, Priority);
+		if (Item != "Apple" || Priority != 5)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicOperationTest 4 Failed"));
+			return;
+		}
+
+		BasicOperationTestQueue.Dequeue(Item, Priority);
+		if (Item != "Cherry" || Priority != 7)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("BasicOperationTest 5 Failed"));
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("BasicOperationTestSuccess"));
+
+
+		TPriorityQueueUnique<FString, int32> UpdateTestQueue;
+
+		UpdateTestQueue.Enqueue("A", 20);
+		UpdateTestQueue.Enqueue("B", 10);
+		UpdateTestQueue.Enqueue("C", 30);
+		UpdateTestQueue.Enqueue("C", 25);
+
+		UpdateTestQueue.UpdatePriority("B", 5);
+
+		UpdateTestQueue.Dequeue(Item, Priority);
+		if (Item != "B" || Priority != 5)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("UpdateTest 1 Failed"));
+			return;
+		} 
+
+		UpdateTestQueue.UpdatePriority("A", 35);
+		UpdateTestQueue.Dequeue(Item, Priority);
+		if (Item != "C" || Priority != 25)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("UpdateTest 2 Failed"));
+			return;
+		}
+
+		UpdateTestQueue.Dequeue(Item, Priority);
+		if (Item != "A" || Priority != 35 || !UpdateTestQueue.IsEmpty())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("UpdateTest 3 Failed"));
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("UpdateTestSuccess"));
+	}
 };

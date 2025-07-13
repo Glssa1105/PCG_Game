@@ -8,8 +8,17 @@ AGrid::AGrid()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+
+	USceneComponent* SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	RootComponent = SceneRoot;
 	StaticMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticMesh"));
-	RootComponent =  StaticMeshComponent;
+	StaticMeshComponent->SetupAttachment(RootComponent);
+
+	if (StaticMeshComponent->GetStaticMesh())
+    {
+        FBox Bounds = StaticMeshComponent->GetStaticMesh()->GetBoundingBox();
+        StaticMeshComponent->SetRelativeLocation(-Bounds.GetCenter());
+    }
 }
 
 // Called when the game starts or when spawned
