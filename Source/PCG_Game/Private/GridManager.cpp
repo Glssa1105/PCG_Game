@@ -3,6 +3,7 @@
 
 #include "GridManager.h"
 #include "PriorityQueueUnique.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values
 AGridManager::AGridManager()
@@ -26,16 +27,15 @@ void AGridManager::Tick(float DeltaTime)
 
 void AGridManager::GenerateGrid(int32 Seed)
 {
-	InitGridStatuses();
+	 InitGridStatuses();
 
 	 // 可去重优先队列，选取可选情况最小进行塌陷
 	 TPriorityQueueUnique<FGridStatus,int32,FGridStatus::FStatusPriorityComparator> GridStatusesPriorityQueueUnique;
 	 FVector StartWorldLocation = GetActorLocation();
-	 FIntPoint StartGridLocation = FIntPoint(FMath::RandRange(0, Columns-1),FMath::RandRange(0, Rows-1));
+	 FIntPoint StartGridLocation = FIntPoint(FMath::RandRange(0 ,X_Size-1),FMath::RandRange(0, Y_Size-1));
 
 	 // 选择初始点
 	 const int32 StartArrayIndex = GetArrayIndexFromGridLocation(StartGridLocation);
-
 	
 	 FRandomStream RandomStream;
 	 RandomStream.Initialize(Seed);
@@ -48,19 +48,25 @@ void AGridManager::GenerateGrid(int32 Seed)
 	 while (!GridStatusesPriorityQueueUnique.IsEmpty())
 	 {
 	 	FGridStatus NowGridStatus;
-	 	int32 NowValidGridNum;
+		int32 NowValidGridNum;
 	 	GridStatusesPriorityQueueUnique.Dequeue(NowGridStatus,NowValidGridNum);
 
 	 	NowGridStatus.SetIsCompleted(true);
 	 	
-		// 权重随机算法 这里先均分概率
-	 	int32 RandomCounts = NowGridStatus.GetValidGridWithRotationNum();
-		int32 RandomIndex = RandomStream.FRandRange(0,RandomCounts);
-
+	 	// 权重随机算法 这里先均分概率
+	 	int32 ValidCounts = NowGridStatus.GetValidGridWithRotationNum();
+	 	if (ValidCounts == 0)
+	 	{
+	 		// 处理所有情况都被剔除时
+	 		// 尽可能不出现该情况，可能塞一个空？
+			UE_LOG(LogTemp, Display, TEXT("Fail To Search Next Grid"));
+	 	}
+	 	int32 RandomIndex = RandomStream.FRandRange(0,ValidCounts);
+	 	
 	 	int32 GridIndex,GridRotation;
 	 	NowGridStatus.GetGridWithRotationByValidIndex(RandomIndex,GridIndex,GridRotation);
-
 	 	FIntPoint GridLocation = NowGridStatus.GetGridLocation();
+	 	
 		FActorSpawnParameters SpawnParameters;
 		SpawnParameters.Owner = this;
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -69,56 +75,106 @@ void AGridManager::GenerateGrid(int32 Seed)
 	 	FVector Location = StartWorldLocation + FVector(GridLocation.X*GridSpacing, GridLocation.Y*GridSpacing, 0);
 	 	FRotator Rotator;
 	 	NowGridStatus.GetRotatorByGridRotation(GridRotation,Rotator);
-	 	if (AGrid* NewGrid = GetWorld()->SpawnActor<AGrid>(GridClasses[GridIndex],Location,Rotator,SpawnParameters); NewGrid != nullptr)
+
+	 	AGrid* NewGrid;
+	 	if (NewGrid = GetWorld()->SpawnActor<AGrid>(GridClasses[GridIndex],Location,Rotator,SpawnParameters); NewGrid != nullptr)
 	 	{
 	 		Grids[ArrayIndex] = NewGrid;
 	 	}
+	 	else
+	 	{
+	 		UE_LOG(LogTemp,Error,TEXT("%s"),TEXT("Failed to Spawn Grid"));
+	 	}
 
 	 	// 2D Status
-	 	for (int32 DeltaX = -1; DeltaX <= 1; DeltaX++) {
-	 		for (int32 DeltaY = -1; DeltaY <= 1; DeltaY++) {
-	 			if (DeltaX == 0 && DeltaY == 0)
-	 				continue;
-	 			int32 NewX = GridLocation.X+DeltaX;
-	 			int32 NewY = GridLocation.Y+DeltaY;
+	 	const TArray<TPair<int32,int32>> NextGridDelta =
+	 		{
+	 			{1,0},{0,1},{-1,0},{0,-1}
+	 		};
+	 	int DirectionIndex = 0;
+
+	 	// 4 个方向
+	 	for (auto& NextPair:NextGridDelta) {
+	 		int32 DeltaX = NextPair.Key;
+	 		int32 DeltaY = NextPair.Value;
+	 		int32 NewX = GridLocation.X+DeltaX;
+	 		int32 NewY = GridLocation.Y+DeltaY;
+	 		
+	 		if(NewX<0||NewX>=X_Size||NewY<0||NewY>=Y_Size)
+	 			continue;
+	 		int NextGridArrayIndex = GetArrayIndexFromGridLocation(FIntPoint(NewX,NewY));
+	 		auto& NextGridStatus = GridStatuses[NextGridArrayIndex];
+	 		if(!NextGridStatus.IsCompleted())
+	 		{
+	 			int32 AcceptBitmask = NewGrid->GetDirectionAcceptBitmask(GridRotation,DirectionIndex);
+	 			int32 SelfBitmask = NewGrid->GetDirectionSelfBitmask(GridRotation,DirectionIndex);
+	 			int32 OppositeDirectionIndex = GetOppositeDirectionIndex(DirectionIndex);
+
+	 			// 根据新 Grid 的 SlotBitMask 更新对应位置的 GridStatus，去除不可能对象
 	 			
-	 			if(NewX<0||NewX>=Columns||NewY<0||NewY>=Rows)
-	 				continue;
-	 			auto& NextGridStatus = GridStatuses[GetArrayIndexFromGridLocation(FIntPoint(NewX,NewY))];
-	 			if(!NextGridStatus.IsCompleted())
-	 			{
-					// 根据新Grid规则进行更新 GridStatus
-	 				
-
-
-	 				
-	 				GridStatusesPriorityQueueUnique.Enqueue(NextGridStatus,NextGridStatus.GetValidGridWithRotationNum());
-	 			}
+	 			UpdateGridStatesByGridSlotBitmask(NextGridArrayIndex,OppositeDirectionIndex,AcceptBitmask,SelfBitmask);
+	 			
+	 			GridStatusesPriorityQueueUnique.Enqueue(NextGridStatus,NextGridStatus.GetValidGridWithRotationNum());
 	 		}
+	 		DirectionIndex++;
 	 	}
 
 	 	GridStatuses[ArrayIndex] = NowGridStatus; 
 	}
 }
 
+void AGridManager::UpdateGridStatesByGridSlotBitmask(const int32 GridStatesIndex,const int32 DirectionIndex,const int32 AcceptBitmask,const int32 SelfBitMask)
+{
+	FGridStatus& GridStatus = GridStatuses[GridStatesIndex];
+
+	// 目前可能的 Grid 对象
+	TArray<int32> ValidGridTypeIndexArray;
+	GridStatus.GetValidGridIndexArray(ValidGridTypeIndexArray);
+	for (int32 GridTypeIndex:ValidGridTypeIndexArray)
+	{
+		// 目前该 Gird 对象可能的旋转情况
+		TArray<int32> ValidGridRotationIndexArray;
+		GridStatus.GetValidGridRotationIndexArray(GridTypeIndex,ValidGridRotationIndexArray);
+		int RotationCounts = ValidGridRotationIndexArray.Num();
+		
+		for (int32 RotationIndex:ValidGridRotationIndexArray)
+		{
+			// 若该可能会发生冲突，则剔除
+			if (!GridClasses[GridTypeIndex].GetDefaultObject()->CheckConnectionValid(RotationIndex,DirectionIndex,AcceptBitmask,SelfBitMask))
+			{
+				GridStatus.SetGridRotationValid(GridTypeIndex,RotationIndex,false);
+				RotationCounts--;
+			}
+		}
+
+		if (RotationCounts == 0)
+			GridStatus.SetGridValid(GridTypeIndex,false);
+	}
+}
+
 void AGridManager::InitGridStatuses()
 {
-	Grids.SetNumUninitialized(Rows*Columns);
-	for (int32 Row = 0; Row < Rows; Row++)
+	Grids.SetNumUninitialized(X_Size*Y_Size);
+	for (int32 X = 0; X < X_Size; X++)
 	{
-		for (int32 Column = 0; Column < Columns; Column++)
+		for (int32 Y = 0; Y < Y_Size; Y++)
 		{
-			const FIntPoint GridLocation = FIntPoint(Column, Row);
+			const FIntPoint GridLocation = FIntPoint(X, Y);
 			const int32 GridTypeNums = GridClasses.Num();
-			// 2D With 4 Rotation ; 3D With 6 Rotation
+			// 2D With 4 Direction ; 3D With 6 Direction
 			constexpr int32 RotationNums = 4;
 			GridStatuses.Add(FGridStatus(GridLocation,GridTypeNums,RotationNums));
 		}
 	}
 }
 
+int32 AGridManager::GetOppositeDirectionIndex(const int32 DirectionIndex)
+{
+	return (DirectionIndex+2)%4;
+}
+
 int32 AGridManager::GetArrayIndexFromGridLocation(const FIntPoint GridLocation) const 
 {
-	return GridLocation.Y * Columns + GridLocation.X; 
+	return GridLocation.X * Y_Size + GridLocation.Y; 
 }
 

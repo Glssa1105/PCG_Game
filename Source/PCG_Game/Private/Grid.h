@@ -7,16 +7,25 @@
 #include "Grid.generated.h"
 
 
-UENUM(BlueprintType,Meta = (Bitflags))
+#define HAS_BIT(Bitmask,Bit)  (((Bitmask) & static_cast<uint8>(Bit)) == static_cast<uint8>(Bit))
+#define SET_BIT(Bitmask,Bit) (Bitmask |= static_cast<uint8>(Bit))
+#define CLEAR_BIT(Bitmask,Bit) ((Bitmask) &= static_cast<uint8>(~(Bit)))
+
+UENUM(BlueprintType,Meta = (Bitflags,UseEnumValuesAsMaskValuesInEditor = "true"))
 enum class EGridSlot : uint8
 {
-	// 允许为空
-	AllowEmpty = 0,
-	// 允许有物体
-	Allow = 1 << 0,
+	Null				= 0			UMETA(Hidden),
+	// 空槽
+	Empty				= 1 << 0	UMETA(DisplayName = "空槽"),
+	// 允许非全连接
+	UnFullConnectSlot	= 1 << 1	UMETA(DisplayName = "非全槽"),
 	// 允许全连接
-	FullConnect = 1 << 1
+	FullConnectSlot		= 1 << 2    UMETA(DisplayName = "全连接槽"),
 };
+
+
+
+ENUM_CLASS_FLAGS(EGridSlot);
 
 UCLASS()
 class AGrid : public AActor
@@ -36,25 +45,31 @@ public:
 
 	UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category = "Grid")
 	class UStaticMeshComponent* StaticMeshComponent;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 X_Forward_Accept;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 Y_Forward_Accept;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 X_Backward_Accept;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 Y_Backward_Accept;
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	EGridSlot X_Forward;
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	EGridSlot Y_Forward;
-	// UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	// EGridSlot Z_Forward;
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	EGridSlot X_Backward;
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	EGridSlot Y_Backward;
-	// UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Slot")
-	// EGridSlot Z_Backward;
 
-	EGridSlot GetXForwardSlot() const {return this->X_Forward;}
-	EGridSlot GetXBackwardSlot() const {return this->X_Forward;}
-	EGridSlot GetYForwardSlot() const {return this->X_Forward;}
-	EGridSlot GetYBackwardSlot() const {return this->X_Forward;}
-	// EGridSlot GetXForwardSlot() const {return this->X_Forward;}
-	// EGridSlot GetXForwardSlot() const {return this->X_Forward;}
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 X_Forward_Self;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 Y_Forward_Self;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 X_Backward_Self;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum = "/Script/PCG_Game.EGridSlot"), Category="Grid Slot Accept")
+	int32 Y_Backward_Self;
 
+	
+	
+	int32 GetDirectionSelfBitmask(const int32 GridRotation,const int32 DirectionIndex) const;
+
+	int32 GetDirectionAcceptBitmask(const int32 GridRotation,const int32 DirectionIndex) const;
+	
+	bool CheckConnectionValid(const int32 GridRotation,const int32 DirectionIndex, const int32 TargetSelfBitmask,const int32 TargetAcceptBitmask) const;
 };

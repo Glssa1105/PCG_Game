@@ -64,11 +64,11 @@ class AGridManager : public AActor
 			return m_ValidGridList[GridTypeIndex];
 		}
 
-		bool IsValidGridDirection(const int32 GridTypeIndex,const int32 DirectionIndex)
+		bool IsValidGridRotation(const int32 GridTypeIndex,const int32 RotationIndex)
 		{
 			check(GridTypeIndex < m_GridTypeNums);
-			check(DirectionIndex < m_RotationNums);
-			return m_ValidGridRotationList[GridTypeIndex * m_RotationNums + DirectionIndex];
+			check(RotationIndex < m_RotationNums);
+			return m_ValidGridRotationList[GridTypeIndex * m_RotationNums + RotationIndex];
 		}
 
 		void SetGridValid(const int32 GridTypeIndex,const bool IsValid)
@@ -77,12 +77,12 @@ class AGridManager : public AActor
 			m_ValidGridList[GridTypeIndex] = IsValid;
 		}
 
-		void SetGridDirectionValid(const int32 GridTypeIndex,const int32 DirectionIndex,const bool IsValid)
+		void SetGridRotationValid(const int32 GridTypeIndex,const int32 RotationIndex,const bool IsValid)
 		{
 			check(GridTypeIndex < m_GridTypeNums);
-			check(DirectionIndex < m_RotationNums);
-			const int32 DirectionBitIndex = GetDirectionBitIndex(GridTypeIndex,DirectionIndex);
-			m_ValidGridRotationList[DirectionBitIndex] = IsValid; 
+			check(RotationIndex < m_RotationNums);
+			const int32 RotationBitIndex = GetRotationBitIndex(GridTypeIndex,RotationIndex);
+			m_ValidGridRotationList[RotationBitIndex] = IsValid; 
 		}
 
 		FIntPoint GetGridLocation() const 
@@ -98,6 +98,26 @@ class AGridManager : public AActor
 		int32 GetValidGridWithRotationNum() const
 		{
 			return m_ValidGridRotationList.CountSetBits();
+		}
+
+		void GetValidGridIndexArray(TArray<int32>& ValidIndexArray) const
+		{
+			for (TConstSetBitIterator<> It(m_ValidGridList);It;++It)
+			{
+				ValidIndexArray.Add(It.GetIndex());
+			}
+		}
+
+		void GetValidGridRotationIndexArray(int32 GridIndex,TArray<int32>& ValidRotationIndexArray) const
+		{
+			const int32 StartIndex = GridIndex * m_RotationNums;
+			for (int32 i = 0 ;i<m_RotationNums;++i)
+			{
+				if (m_ValidGridRotationList[StartIndex + i])
+				{
+					ValidRotationIndexArray.Add(i);
+				}
+			}
 		}
 
 		void GetRotatorByGridRotation(int32 GridRotation,FRotator& OutRotator) const
@@ -130,6 +150,7 @@ class AGridManager : public AActor
 				if(Index==0)
 				{
 					TargetIndex = It.GetIndex();
+					break;
 				}
 				Index--;
 			}
@@ -138,6 +159,7 @@ class AGridManager : public AActor
 			GridRotation = TargetIndex-GridIndex*m_RotationNums;
 			return true;
 		}
+		
 		
 		struct FStatusPriorityComparator
 		{
@@ -148,9 +170,9 @@ class AGridManager : public AActor
 		};
 		
 	private:
-		uint32 GetDirectionBitIndex(const int32 GridTypeIndex,const int32 DirectionIndex) const
+		uint32 GetRotationBitIndex(const int32 GridTypeIndex,const int32 RotationIndex) const
 		{
-			return GridTypeIndex * m_RotationNums + DirectionIndex;
+			return GridTypeIndex * m_RotationNums + RotationIndex;
 		}
 	};
 	
@@ -166,24 +188,28 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UFUNCTION(BlueprintCallable,Category = "Grid")
+	UFUNCTION(BlueprintCallable,Category = "Grid Manager")
 	void GenerateGrid(int32 Seed);
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
-	int32 Rows = 5;
+	// 根据已有 Grid 信息，更新指定 GridStatus 对象，剔除不可生成对象
+	UFUNCTION(BlueprintCallable,Category = "Grid Manager")
+	void UpdateGridStatesByGridSlotBitmask(const int32 GridStatesIndex,const int32 DirectionIndex,const int32 AcceptBitmask,const int32 SelfBitMask);
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
-	int32 Columns = 5;
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Map Settings")
+	int32 X_Size = 5;
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Map Settings")
+	int32 Y_Size = 5;
+
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Map Settings")
 	float GridSpacing = 100.0f;
 
-	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Settings")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "Grid Map Settings")
 	TArray<TSubclassOf<AGrid>> GridClasses;
 
 private:
 	void InitGridStatuses();
-
+	static int32 GetOppositeDirectionIndex(const int32 DirectionIndex);
 	int32 GetArrayIndexFromGridLocation(const FIntPoint GridLocation) const;
 	
 private:
