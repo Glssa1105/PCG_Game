@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "WFCTileActor.h"
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
 #include "WaveFunctionCollapse.generated.h"
@@ -58,6 +59,20 @@ struct FWFCCell
     }
 };
 
+USTRUCT()
+struct FWFCSnapshot
+{
+    GENERATED_BODY()
+
+    TArray<TArray<FWFCCell>> GridState;
+    FIntPoint LastCollapsedCell;
+    
+    FWFCSnapshot()
+    {
+        LastCollapsedCell = FIntPoint(-1, -1);
+    }
+};
+
 UCLASS()
 class PCG_GAME_API AWaveFunctionCollapse : public AActor
 {
@@ -82,19 +97,37 @@ protected:
     TArray<FWFCTile> TileSet;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
-    int32 RandomSeed = 12345;
+    int32 RandomSeed = 5201314;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
     int32 MaxIterations = 1000;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    TSubclassOf<AWFCTileActor> TileActorClass;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    bool bEnableBacktracking = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    int32 MaxBacktrackSteps = 10;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    int32 MaxRetries = 3;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    bool bAllowFallbackTiles = true;
+
 
 private:
     TArray<TArray<FWFCCell>> Grid;
 
     TMap<FString, FWFCTile> TileMap;
 
-    TArray<UStaticMeshComponent*> GeneratedMeshes;
+    TArray<AWFCTileActor*> GeneratedTiles;
 
     FRandomStream RandomStream;
+    TArray<FWFCSnapshot> Snapshots;
+    int32 CurrentRetry = 0;
 
 public:
     UFUNCTION(BlueprintCallable, Category = "WFC")
@@ -109,6 +142,8 @@ public:
 private:
     void InitializeGrid();
     bool SolveWFC();
+    bool SolveWFCWithBacktracking();
+    
     FIntPoint FindLowestEntropyCell();
     void CollapseCell(int32 X, int32 Y);
     void PropagateConstraints(int32 X, int32 Y);
@@ -118,7 +153,15 @@ private:
     void ClearGeneratedMeshes();
     
     bool IsValidPosition(int32 X, int32 Y) const;
-    int32 GetDirection(int32 FromX, int32 FromY, int32 ToX, int32 ToY) const;
     FString SelectRandomTile(const TArray<FString>& PossibleTiles);
-    void CalculateEntropy(int32 X, int32 Y);
+    
+    void SaveSnapshot(const FIntPoint& LastCollapsedCell);
+    bool RestoreSnapshot();
+    void ClearSnapshots();
+    
+    bool HasContradiction() const;
+    void HandleContradiction();
+    FString GetFallbackTile(int32 X, int32 Y);
+    void ValidateTileConstraints();
+    
 };

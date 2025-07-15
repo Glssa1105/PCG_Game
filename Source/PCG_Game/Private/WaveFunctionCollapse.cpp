@@ -1,4 +1,6 @@
 ﻿#include "WaveFunctionCollapse.h"
+
+#include "WFCTileActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -22,6 +24,8 @@ void AWaveFunctionCollapse::BeginPlay()
             TileMap.Add(Tile.TileID, Tile);
         }
     }
+
+    GenerateGrid();
 }
 
 void AWaveFunctionCollapse::GenerateGrid()
@@ -31,7 +35,7 @@ void AWaveFunctionCollapse::GenerateGrid()
         UE_LOG(LogTemp, Warning, TEXT("No tiles defined in TileSet"));
         return;
     }
-
+    
     ClearGrid();
     RandomStream.Initialize(RandomSeed);
 
@@ -87,32 +91,284 @@ void AWaveFunctionCollapse::InitializeGrid()
 
 bool AWaveFunctionCollapse::SolveWFC()
 {
-    int32 Iterations = 0;
-    
-    while (Iterations < MaxIterations)
+    if (bEnableBacktracking)
     {
-        Iterations++;
+        return SolveWFCWithBacktracking();
+    }
 
-        FIntPoint LowestEntropyPos = FindLowestEntropyCell();
+    for (CurrentRetry = 0; CurrentRetry < MaxRetries; CurrentRetry++)
+    {
+        InitializeGrid();
         
-        if (LowestEntropyPos.X == -1)
+        int32 Iterations = 0;
+        bool bSuccess = true;
+        
+        while (Iterations < MaxIterations && bSuccess)
         {
-            return true;
+            Iterations++;
+
+            FIntPoint LowestEntropyPos = FindLowestEntropyCell();
+            
+            if (LowestEntropyPos.X == -1)
+            {
+                UE_LOG(LogTemp, Log, TEXT("WFC completed successfully on retry %d"), CurrentRetry + 1);
+                return true;
+            }
+            
+            if (Grid[LowestEntropyPos.X][LowestEntropyPos.Y].Entropy == 0)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Contradiction found at (%d, %d), retry %d"), 
+                       LowestEntropyPos.X, LowestEntropyPos.Y, CurrentRetry + 1);
+                bSuccess = false;
+                break;
+            }
+            
+            CollapseCell(LowestEntropyPos.X, LowestEntropyPos.Y);
+            PropagateConstraints(LowestEntropyPos.X, LowestEntropyPos.Y);
         }
         
-        if (Grid[LowestEntropyPos.X][LowestEntropyPos.Y].Entropy == 0)
+        if (!bSuccess)
         {
-            UE_LOG(LogTemp, Error, TEXT("WFC failed: contradiction at (%d, %d)"), LowestEntropyPos.X, LowestEntropyPos.Y);
-            return false;
+            RandomSeed += 1000;
+            RandomStream.Initialize(RandomSeed);
+            ClearGrid();
         }
-        
-        CollapseCell(LowestEntropyPos.X, LowestEntropyPos.Y);
-
-        PropagateConstraints(LowestEntropyPos.X, LowestEntropyPos.Y);
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("WFC exceeded maximum iterations"));
+    UE_LOG(LogTemp, Error, TEXT("WFC failed after %d retries"), MaxRetries);
     return false;
+}
+
+bool AWaveFunctionCollapse::SolveWFCWithBacktracking()
+{
+    for (CurrentRetry = 0; CurrentRetry < MaxRetries; CurrentRetry++)
+    {
+        InitializeGrid();
+        ClearSnapshots();
+        
+        int32 Iterations = 0;
+        
+        while (Iterations < MaxIterations)
+        {
+            Iterations++;
+
+            FIntPoint LowestEntropyPos = FindLowestEntropyCell();
+            
+            if (LowestEntropyPos.X == -1)
+            {
+                UE_LOG(LogTemp, Log, TEXT("WFC completed successfully with backtracking"));
+                return true;
+            }
+            
+            if (Grid[LowestEntropyPos.X][LowestEntropyPos.Y].Entropy == 0)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Contradiction at (%d, %d), attempting backtrack"), 
+                       LowestEntropyPos.X, LowestEntropyPos.Y);
+                
+                if (RestoreSnapshot())
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Backtracked successfully"));
+                    continue;
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Cannot backtrack further, restarting"));
+                    break;
+                }
+            }
+            
+            // 回溯用
+            SaveSnapshot(LowestEntropyPos);
+            
+            CollapseCell(LowestEntropyPos.X, LowestEntropyPos.Y);
+            PropagateConstraints(LowestEntropyPos.X, LowestEntropyPos.Y);
+            
+            if (HasContradiction())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Contradiction detected after propagation"));
+            }
+        }
+        
+        // 如果到达这里，说明需要重试
+        RandomSeed += 1000;
+        RandomStream.Initialize(RandomSeed);
+        ClearGrid();
+    }
+    
+    return false;
+}
+
+void AWaveFunctionCollapse::SaveSnapshot(const FIntPoint& LastCollapsedCell)
+{
+    // 限制快照数量
+    if (Snapshots.Num() >= MaxBacktrackSteps)
+    {
+        Snapshots.RemoveAt(0);
+    }
+    
+    FWFCSnapshot Snapshot;
+    Snapshot.GridState = Grid;
+    Snapshot.LastCollapsedCell = LastCollapsedCell;
+    Snapshots.Add(Snapshot);
+}
+
+bool AWaveFunctionCollapse::RestoreSnapshot()
+{
+    if (Snapshots.Num() == 0)
+    {
+        return false;
+    }
+    
+    FWFCSnapshot LastSnapshot = Snapshots.Last();
+    Snapshots.RemoveAt(Snapshots.Num() - 1);
+    
+    Grid = LastSnapshot.GridState;
+    
+    FIntPoint ProblemCell = LastSnapshot.LastCollapsedCell;
+    if (IsValidPosition(ProblemCell.X, ProblemCell.Y))
+    {
+        FWFCCell& Cell = Grid[ProblemCell.X][ProblemCell.Y];
+        
+        if (Cell.bCollapsed && !Cell.SelectedTile.IsEmpty())
+        {
+            Cell.PossibleTiles.Remove(Cell.SelectedTile);
+            Cell.bCollapsed = false;
+            Cell.SelectedTile = "";
+            Cell.Entropy = Cell.PossibleTiles.Num();
+            
+            UE_LOG(LogTemp, Log, TEXT("Removed problematic tile from cell (%d, %d), new entropy: %d"), 
+                   ProblemCell.X, ProblemCell.Y, Cell.Entropy);
+        }
+    }
+    
+    return true;
+}
+
+void AWaveFunctionCollapse::ClearSnapshots()
+{
+    Snapshots.Empty();
+}
+
+bool AWaveFunctionCollapse::HasContradiction() const
+{
+    for (int32 X = 0; X < GridWidth; X++)
+    {
+        for (int32 Y = 0; Y < GridHeight; Y++)
+        {
+            const FWFCCell& Cell = Grid[X][Y];
+            if (!Cell.bCollapsed && Cell.Entropy == 0)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void AWaveFunctionCollapse::HandleContradiction()
+{
+    for (int32 X = 0; X < GridWidth; X++)
+    {
+        for (int32 Y = 0; Y < GridHeight; Y++)
+        {
+            FWFCCell& Cell = Grid[X][Y];
+            if (!Cell.bCollapsed && Cell.Entropy == 0)
+            {
+                if (bAllowFallbackTiles)
+                {
+                    // Fallback最多使用 ，再Fallback第一个
+                    FString FallbackTile = GetFallbackTile(X, Y);
+                    if (!FallbackTile.IsEmpty())
+                    {
+                        Cell.PossibleTiles.Add(FallbackTile);
+                        Cell.Entropy = 1;
+                        UE_LOG(LogTemp, Warning, TEXT("Applied fallback tile %s to cell (%d, %d)"), 
+                               *FallbackTile, X, Y);
+                    }
+                }
+            }
+        }
+    }
+}
+
+FString AWaveFunctionCollapse::GetFallbackTile(int32 X, int32 Y)
+{
+    TMap<FString, int32> TileFrequency;
+    
+    for (const FWFCTile& Tile : TileSet)
+    {
+        if (!Tile.TileID.IsEmpty())
+        {
+            TileFrequency.Add(Tile.TileID, 0);
+        }
+    }
+    
+    TArray<FIntPoint> Neighbors = {
+        FIntPoint(X +1 , Y ), FIntPoint(X , Y + 1),
+        FIntPoint(X -1, Y ), FIntPoint(X , Y -1)
+    };
+    
+    for (const FIntPoint& NeighborPos : Neighbors)
+    {
+        if (IsValidPosition(NeighborPos.X, NeighborPos.Y))
+        {
+            const FWFCCell& NeighborCell = Grid[NeighborPos.X][NeighborPos.Y];
+            if (NeighborCell.bCollapsed && !NeighborCell.SelectedTile.IsEmpty())
+            {
+                if (TileFrequency.Contains(NeighborCell.SelectedTile))
+                {
+                    TileFrequency[NeighborCell.SelectedTile]++;
+                }
+            }
+        }
+    }
+    
+    FString BestTile = "";
+    int32 MaxFrequency = -1;
+    
+    for (const auto& Pair : TileFrequency)
+    {
+        if (Pair.Value > MaxFrequency)
+        {
+            MaxFrequency = Pair.Value;
+            BestTile = Pair.Key;
+        }
+    }
+    
+    if (BestTile.IsEmpty() && TileSet.Num() > 0)
+    {
+        BestTile = TileSet[0].TileID;
+    }
+    
+    return BestTile;
+}
+
+// 检查所有所有规则可用
+void AWaveFunctionCollapse::ValidateTileConstraints()
+{
+    for (const FWFCTile& Tile : TileSet)
+    {
+        if (Tile.TileID.IsEmpty()) continue;
+
+        TArray<TArray<FString>*> NeighborArrays = {
+            const_cast<TArray<FString>*>(&Tile.UpNeighbors),
+            const_cast<TArray<FString>*>(&Tile.RightNeighbors),
+            const_cast<TArray<FString>*>(&Tile.DownNeighbors),
+            const_cast<TArray<FString>*>(&Tile.LeftNeighbors)
+        };
+        
+        for (int32 Dir = 0; Dir < 4; Dir++)
+        {
+            for (const FString& NeighborID : *NeighborArrays[Dir])
+            {
+                if (!TileMap.Contains(NeighborID))
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("Tile %s references non-existent neighbor %s in direction %d"), 
+                           *Tile.TileID, *NeighborID, Dir);
+                }
+            }
+        }
+    }
 }
 
 FIntPoint AWaveFunctionCollapse::FindLowestEntropyCell()
@@ -220,10 +476,10 @@ void AWaveFunctionCollapse::UpdateCellPossibilities(int32 X, int32 Y)
         bool bIsValid = true;
         
         TArray<FIntPoint> Neighbors = {
-            FIntPoint(X, Y - 1),
-            FIntPoint(X + 1, Y), 
-            FIntPoint(X, Y + 1), 
-            FIntPoint(X - 1, Y)
+            FIntPoint(X + 1 , Y     ),
+            FIntPoint(X     , Y + 1 ), 
+            FIntPoint(X - 1 , Y     ), 
+            FIntPoint(X     , Y - 1 )
         };
         
         for (int32 Dir = 0; Dir < 4; Dir++)
@@ -296,28 +552,51 @@ void AWaveFunctionCollapse::SpawnTileAtPosition(int32 X, int32 Y, const FString&
     
     const FWFCTile& Tile = TileMap[TileID];
     
-    if (Tile.Mesh)
+    if (TileActorClass)
     {
-        UStaticMeshComponent* MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(*FString::Printf(TEXT("Mesh_%d_%d"), X, Y));
-        MeshComponent->SetStaticMesh(Tile.Mesh);
-        MeshComponent->SetupAttachment(RootComponent);
-        FVector Position = FVector(X * TileSize, Y * TileSize, 0.0f);
-        MeshComponent->SetWorldLocation(GetActorLocation() + Position);
-        
-        GeneratedMeshes.Add(MeshComponent);
+   
+        FVector Position = GetActorLocation() + FVector(X * TileSize, Y * TileSize, 0.0f);
+        FRotator Rotation = GetActorRotation();
+        // 生成Tile Actor
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.Instigator = GetInstigator();
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        AWFCTileActor* TileActor = GetWorld()->SpawnActor<AWFCTileActor>(TileActorClass, Position, Rotation, SpawnParams);
+        if (TileActor)
+        {
+            // 设置网格和ID
+            TileActor->SetTileMesh(Tile.Mesh);
+            TileActor->SetTileID(TileID);
+            
+            // 保存引用以便后续清理
+            GeneratedTiles.Add(TileActor);
+            
+            UE_LOG(LogTemp, Log, TEXT("Spawned tile %s at position (%d, %d)"), *TileID, X, Y);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn tile actor for %s"), *TileID);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("TileActorClass not set"));
     }
 }
 
 void AWaveFunctionCollapse::ClearGeneratedMeshes()
 {
-    for (UStaticMeshComponent* MeshComponent : GeneratedMeshes)
+    for (AWFCTileActor* TileActor : GeneratedTiles)
     {
-        if (MeshComponent)
+        if (TileActor && IsValid(TileActor))
         {
-            MeshComponent->DestroyComponent();
+            TileActor->Destroy();
         }
     }
-    GeneratedMeshes.Empty();
+    GeneratedTiles.Empty();
 }
 
 bool AWaveFunctionCollapse::IsValidPosition(int32 X, int32 Y) const
