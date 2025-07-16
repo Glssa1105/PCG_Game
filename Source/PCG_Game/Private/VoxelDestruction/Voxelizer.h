@@ -24,6 +24,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// 非异步 C++ 实现
+	UFUNCTION(BlueprintCallable,CallInEditor)
 	void Voxelize();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
@@ -35,6 +36,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	UStaticMesh* VoxelStaticMesh;
 
+	UPROPERTY(EditAnywhere,Blueprintable,Category="Voxelization")
+	TSubclassOf<AActor> ISM_Class;
+
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	USceneComponent* DefaultSceneRoot;
+	
 private:
 	//TArray<TObjectPtr<UTextureRenderTarget2D>> CurrentRenderTarget;
 	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
@@ -42,9 +50,8 @@ private:
 	
 	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
 	USceneCaptureComponent2D* CaptureComponent;
-
-
-	TArray<FVector> VoxelStatues;
+	
+	
 	TSet<FVector> VoxelCheckSet;
 	
 	// 需要异步回读 RenderTarget 否则性能极低
@@ -54,5 +61,5 @@ private:
 	void BuildInstanceMesh();
 
 	FVector SnapExtentToVoxelSize(const FVector& Extent) const;
-	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,FTransform ViewTransform,USceneCaptureComponent2D RenderTarget);
+	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,const FTransform ViewTransform,const UTextureRenderTarget2D* RenderTarget) const;
 };
