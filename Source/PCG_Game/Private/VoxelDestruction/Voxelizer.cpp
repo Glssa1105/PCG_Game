@@ -2,15 +2,16 @@
 
 
 #include "VoxelDestruction/Voxelizer.h"
-
-#include <string>
-
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Kismet/KismetStringLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "RHI.h"
+#include "RHICommandList.h"
+#include "Rendering/RenderingCommon.h"
+#include "GlobalShader.h"
 
 // Sets default values
 AVoxelizer::AVoxelizer()
@@ -33,13 +34,21 @@ AVoxelizer::AVoxelizer()
 void AVoxelizer::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
 // Called every frame
 void AVoxelizer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (bIsStartVoxelize)
+	{
+		if (CheckReadbackComplete())
+		{
+			CompleteVoxelize();
+			bIsStartVoxelize = false;
+			UE_LOG(LogTemp, Log, TEXT("ReadBackFence Complete"));
+		}
+	}
 }
 
 void AVoxelizer::Voxelize()
@@ -54,15 +63,65 @@ void AVoxelizer::Voxelize()
 		{0,0,-1}
 	};
 
-	for(auto Direction:DirectionList)
+	RenderTargets.SetNum(DirectionList.Num());
+	RawColorsArrays.SetNum(DirectionList.Num());
+	ViewTransforms.SetNum(DirectionList.Num());
+	
+	for(int32 DirectionIndex =0;DirectionIndex<DirectionList.Num();DirectionIndex++)
 	{
-		SetView(Direction);
-		Sample();
+		SetView(DirectionIndex,DirectionList[DirectionIndex]);
+	}
+	
+	RenderTargetReadBack(true);
+	for(int32 DirectionIndex =0;DirectionIndex<DirectionList.Num();DirectionIndex++)
+	{
+		Sample(DirectionIndex);
 	}
 	BuildInstanceMesh();
 }
 
-void AVoxelizer::SetView(const FVector& SampleDirection)
+bool AVoxelizer::RenderTargetReadBack(bool bFlushImmediately)
+{
+	for (int32 Index = 0;Index < RenderTargets.Num();Index++)
+	{
+		UTextureRenderTarget2D* TextureRenderTarget = RenderTargets[Index];
+		TArray<FLinearColor>& OutLinearSamples = RawColorsArrays[Index];
+		if (TextureRenderTarget != nullptr)
+		{
+			const int32 NumSamples = TextureRenderTarget->SizeX * TextureRenderTarget->SizeY;
+			OutLinearSamples.Reset(NumSamples);
+		
+			FIntRect InSrcRect(0,0,TextureRenderTarget->SizeX,TextureRenderTarget->SizeY);
+			FReadSurfaceDataFlags InFlags = FReadSurfaceDataFlags(RCM_MinMax);
+			FRenderTarget* RenderTarget = TextureRenderTarget->GameThread_GetRenderTargetResource();
+		
+			OutLinearSamples.Reset();
+			ENQUEUE_RENDER_COMMAND(ReadSurfaceCommand)(
+				[RenderTarget_RT = RenderTarget,SrcRect_RT = InSrcRect,OutData_RT = &OutLinearSamples,Flag_RT=InFlags](FRHICommandListImmediate& RHICmdList)
+				{
+					RHICmdList.ReadSurfaceData(RenderTarget_RT->GetShaderResourceTexture(), SrcRect_RT, *OutData_RT, Flag_RT);	
+				});
+			if (bFlushImmediately)
+			{
+				FlushRenderingCommands();
+				if (OutLinearSamples.Num() == 0)
+				{
+					UE_LOG(LogTemp,Error,TEXT("GPU Resource readback failed!"));
+					return false;
+				}
+			}
+		}
+	}
+	if (!bFlushImmediately)
+	{
+		ReadBackFence.BeginFence();
+		UE_LOG(LogTemp, Display, TEXT("Start ReadBackFence"));
+	}
+	
+	return true;
+}
+
+void AVoxelizer::SetView(const int32 DirectionIndex,const FVector& SampleDirection)
 {
 	FVector TargetOrigin = FVector::ZeroVector;
 	FVector TargetBoxExtent = FVector::ZeroVector;
@@ -75,6 +134,7 @@ void AVoxelizer::SetView(const FVector& SampleDirection)
 	FRotator NewRotation = UKismetMathLibrary::FindLookAtRotation(NewLocation,TargetOrigin);
 
 	CaptureComponent->SetWorldLocationAndRotation(NewLocation,NewRotation);
+	ViewTransforms[DirectionIndex] = CaptureComponent->GetComponentTransform();
 
 	FVector BoundSizeInView = SnappedExtent * 2;
 	FVector RotatedBoundSize = NewRotation.RotateVector(BoundSizeInView);
@@ -87,8 +147,8 @@ void AVoxelizer::SetView(const FVector& SampleDirection)
 	float RT_Width = ceil(StandardRotatedBoundSize.Y/VoxelSize);
 	float RT_Height = ceil(StandardRotatedBoundSize.Z/VoxelSize);
 
-	CurrentRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(),RT_Width,RT_Height);
-	CaptureComponent->TextureTarget = CurrentRenderTarget;
+	RenderTargets[DirectionIndex] = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(),RT_Width,RT_Height);
+	CaptureComponent->TextureTarget = RenderTargets[DirectionIndex];
 	
 	CaptureComponent->ClearShowOnlyComponents();
 	CaptureComponent->ShowOnlyActorComponents(VoxelizationTarget);
@@ -105,11 +165,13 @@ void AVoxelizer::SetView(const FVector& SampleDirection)
 	// UKismetSystemLibrary::PrintString(GetWorld(),OutString,true,true,FLinearColor(0,0.66,1),5);
 }
 
-void AVoxelizer::Sample()
+void AVoxelizer::Sample(int32 DirectionIndex)
 {
-	TArray<FLinearColor> RawColorsArray;
-	UKismetRenderingLibrary::ReadRenderTargetRaw(GetWorld(),CurrentRenderTarget,RawColorsArray,false);
-
+	TArray<FLinearColor> RawColorsArray = RawColorsArrays[DirectionIndex];
+	UTextureRenderTarget2D* CurrentRT = RenderTargets[DirectionIndex];
+	//UKismetRenderingLibrary::ReadRenderTargetRaw(GetWorld(),CurrentRenderTarget,RawColorsArray,false);
+	//RenderTargetReadBack(RenderTarget[DirectionIndex],RawColorsArray);
+	
 	for (int i = 0;i<RawColorsArray.Num();++i)
 	{
 		auto RawColor = RawColorsArray[i];
@@ -119,14 +181,14 @@ void AVoxelizer::Sample()
 		if (Depth > 6500.f)
 			continue;
 
-		int32 Size_X = CurrentRenderTarget->SizeX;
-		int32 Size_Y = CurrentRenderTarget->SizeY;
+		int32 Size_X = CurrentRT->SizeX;
+		int32 Size_Y = CurrentRT->SizeY;
 
 		float RT_Space_X = i%Size_X;
 		float RT_Space_Y = Size_Y - i/Size_X -1;
 
-		FTransform ViewTransform = CaptureComponent->GetComponentTransform();
-		FVector WorldLocation = RTSpaceToWorldSpace(Depth,RT_Space_X,RT_Space_Y,ViewTransform,CurrentRenderTarget);
+		FTransform& ViewTransform = ViewTransforms[DirectionIndex];
+		FVector WorldLocation = RTSpaceToWorldSpace(Depth,RT_Space_X,RT_Space_Y,ViewTransform,CurrentRT);
 		
 		VoxelCheckSet.Add(WorldLocation);
 	}
@@ -165,6 +227,51 @@ void AVoxelizer::BuildInstanceMesh()
 	ISMComponent->AddInstances(InstanceTransforms,false);
 }
 
+void AVoxelizer::StartVoxelize()
+{
+	VoxelCheckSet.Empty();
+	const TArray<FVector> DirectionList = {
+		{1,0,0},
+		{-1,0,0},
+		{0,1,0},
+		{0,-1,0},
+		{0,0,1},
+		{0,0,-1}
+	};
+
+	RenderTargets.Empty();
+	RawColorsArrays.Empty();
+	ViewTransforms.Empty();
+	
+	RenderTargets.SetNum(DirectionList.Num());
+	RawColorsArrays.SetNum(DirectionList.Num());
+	ViewTransforms.SetNum(DirectionList.Num());
+	
+	for(int32 DirectionIndex =0;DirectionIndex<DirectionList.Num();DirectionIndex++)
+	{
+		SetView(DirectionIndex,DirectionList[DirectionIndex]);
+	}
+	
+	RenderTargetReadBack(false);
+	bIsStartVoxelize = true;
+}
+
+void AVoxelizer::CompleteVoxelize()
+{
+	// Hardcode 6 Directions
+	for(int32 DirectionIndex =0;DirectionIndex<6;DirectionIndex++)
+	{
+		Sample(DirectionIndex);
+	}
+	BuildInstanceMesh();
+}
+
+bool AVoxelizer::CheckReadbackComplete()
+{
+	return ReadBackFence.IsFenceComplete();
+}
+
+
 FVector AVoxelizer::SnapExtentToVoxelSize(const FVector& Extent) const
 {
 	FVector SnapExtent = FVector::ZeroVector;
@@ -195,5 +302,10 @@ FVector AVoxelizer::RTSpaceToWorldSpace(const float Depth, const float X, const 
 	Transform.SetScale3D(FVector(VoxelSize));
 	
 	return UKismetMathLibrary::TransformLocation(Transform,WorldLocation+FVector(0.5f));
+}
+
+void AVoxelizer::SetTarget(AActor* NewTarget)
+{
+	VoxelizationTarget = NewTarget;
 }
 

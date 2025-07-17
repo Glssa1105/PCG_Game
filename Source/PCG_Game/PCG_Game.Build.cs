@@ -8,6 +8,7 @@ public class PCG_Game : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "NavigationSystem", "AIModule", "Niagara", "EnhancedInput" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine",
+	        "RHI","RenderCore","Renderer","RHICore","InputCore", "NavigationSystem", "AIModule", "Niagara", "EnhancedInput" });
     }
 }

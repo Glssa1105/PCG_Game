@@ -7,7 +7,7 @@
 #include "Voxelizer.generated.h"
 
 UCLASS()
-class AVoxelizer : public AActor
+class PCG_GAME_API AVoxelizer : public AActor
 {
 	GENERATED_BODY()
 	
@@ -25,10 +25,6 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void SetTarget(AActor* NewTarget);
-
-	// 非异步 C++ 实现
-	UFUNCTION(BlueprintCallable,CallInEditor)
-	void Voxelize();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	AActor* VoxelizationTarget;
@@ -42,32 +38,50 @@ public:
 	UPROPERTY(EditAnywhere,Blueprintable,Category="Voxelization")
 	UClass* ISM_Class;
 
+	
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	USceneComponent* DefaultSceneRoot;
 	
 private:
-	//TArray<TObjectPtr<UTextureRenderTarget2D>> CurrentRenderTarget;
-	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
-	UTextureRenderTarget2D* CurrentRenderTarget;
+	UPROPERTY()
+	TArray<UTextureRenderTarget2D*> RenderTargets;
+	TArray<TArray<FLinearColor>> RawColorsArrays;
+	TArray<FTransform> ViewTransforms;
 	
 	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
 	USceneCaptureComponent2D* CaptureComponent;
-	
-	
+
+private:
+	// 做缓存机制
+	TMap<UStaticMesh*,TArray<FVector>> VoxelizationCache;
 	TSet<FVector> VoxelCheckSet;
-	
-	// 需要异步回读 RenderTarget 否则性能极低
+
 	// 非异步 C++ 实现
-	void SetView(const FVector& SampleDirection);
-	void Sample();
+public:
+	UFUNCTION(BlueprintCallable,CallInEditor)
+	void Voxelize();
+private:
+	// 需要异步回读 RenderTarget 否则性能极低
+	bool RenderTargetReadBack(bool bFlushImmediately);
+	void SetView(const int32 DirectionIndex,const FVector& SampleDirection);
+	void Sample(int32 DirectionIndex);
 	void BuildInstanceMesh();
 
+	// 异步 C++ 实现
+public:
+	UFUNCTION(BlueprintCallable,CallInEditor)
+	void StartVoxelize();
+private:
+	FRenderCommandFence ReadBackFence;
+	bool bIsStartVoxelize = false;
+	
+	void CompleteVoxelize();
+	bool CheckReadbackComplete();
+	
+	
+private:
+	// Help Function
 	FVector SnapExtentToVoxelSize(const FVector& Extent) const;
 	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,const FTransform ViewTransform,const UTextureRenderTarget2D* RenderTarget) const;
 };
-
-inline void AVoxelizer::SetTarget(AActor* NewTarget)
-{
-	VoxelizationTarget = NewTarget;
-}
