@@ -3,10 +3,14 @@
 
 #include "VoxelDestruction/Voxelizer.h"
 
+#include <string>
+
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetRenderingLibrary.h"
+#include "Kismet/KismetStringLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 // Sets default values
 AVoxelizer::AVoxelizer()
@@ -14,15 +18,15 @@ AVoxelizer::AVoxelizer()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-	CaptureComponent = CreateDefaultSubobject<USceneCaptureComponent2D>("SceneCaptureComponent2D");
-	CaptureComponent->bCaptureEveryFrame = false;
-	CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
-	CaptureComponent->ProjectionType = ECameraProjectionMode::Type::Orthographic;
-	
 	DefaultSceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("DefaultSceneRoot"));
 	RootComponent = DefaultSceneRoot;
 	
-
+	CaptureComponent = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("SceneCaptureComponent2D"));
+	CaptureComponent->bCaptureEveryFrame = false;
+	CaptureComponent->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+	CaptureComponent->ProjectionType = ECameraProjectionMode::Type::Orthographic;
+	CaptureComponent->CaptureSource = SCS_SceneDepth;
+	CaptureComponent->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned
@@ -36,7 +40,6 @@ void AVoxelizer::BeginPlay()
 void AVoxelizer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
 }
 
 void AVoxelizer::Voxelize()
@@ -63,7 +66,7 @@ void AVoxelizer::SetView(const FVector& SampleDirection)
 {
 	FVector TargetOrigin = FVector::ZeroVector;
 	FVector TargetBoxExtent = FVector::ZeroVector;
-	GetActorBounds(false,TargetOrigin,TargetBoxExtent);
+	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
 	FVector SnappedExtent = SnapExtentToVoxelSize(TargetBoxExtent);
 
 	FVector NewLocation = FVector::ZeroVector;
@@ -86,11 +89,20 @@ void AVoxelizer::SetView(const FVector& SampleDirection)
 
 	CurrentRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(),RT_Width,RT_Height);
 	CaptureComponent->TextureTarget = CurrentRenderTarget;
-
+	
+	CaptureComponent->ClearShowOnlyComponents();
 	CaptureComponent->ShowOnlyActorComponents(VoxelizationTarget);
 
 	// 可能 Deferred？
 	CaptureComponent->CaptureScene();
+	
+	// CHECK 1
+	//UKismetSystemLibrary::PrintString(GetWorld(),"Origin" +TargetOrigin.ToString() + "Extent" + TargetBoxExtent.ToString(),true,true,FLinearColor(0,0.66,1),5);
+	// CHECK 2
+	//UKismetSystemLibrary::PrintString(GetWorld(),SnappedExtent.ToString(),true,true,FLinearColor(0,0.66,1),5);
+	// CHECK 3
+	// FString OutString = "Ortho Width:" + FString::SanitizeFloat(StandardRotatedBoundSize.Y) + "RenderTarget Width:" + FString::SanitizeFloat(RT_Width) +"RenderTarget Height"+ FString::SanitizeFloat(RT_Height);
+	// UKismetSystemLibrary::PrintString(GetWorld(),OutString,true,true,FLinearColor(0,0.66,1),5);
 }
 
 void AVoxelizer::Sample()
@@ -124,9 +136,8 @@ void AVoxelizer::BuildInstanceMesh()
 {
 	FVector SpawnTransform = VoxelizationTarget->GetActorLocation();
 	AActor* SpawnedActor = GetWorld()->SpawnActor(
-		ISM_Class->GetClass(),&SpawnTransform);
-
-
+		ISM_Class,&SpawnTransform);
+	
 	if(!SpawnedActor)
 	{
 		UE_LOG(LogTemp,Error,TEXT("Spawn actor failed!"));
@@ -135,7 +146,7 @@ void AVoxelizer::BuildInstanceMesh()
 	
 	UInstancedStaticMeshComponent* ISMComponent = 
 		SpawnedActor->FindComponentByClass<UInstancedStaticMeshComponent>();
-
+	
 	if(!ISMComponent)
 	{
 		UE_LOG(LogTemp,Error,TEXT("Didn't find UInstancedStaticMeshComponent from %s"),*SpawnedActor->GetName());
@@ -184,6 +195,5 @@ FVector AVoxelizer::RTSpaceToWorldSpace(const float Depth, const float X, const 
 	Transform.SetScale3D(FVector(VoxelSize));
 	
 	return UKismetMathLibrary::TransformLocation(Transform,WorldLocation+FVector(0.5f));
-	//FVector ReturnValue = FVector::ZeroVector;
 }
 

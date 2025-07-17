@@ -23,6 +23,9 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	UFUNCTION(BlueprintCallable)
+	void SetTarget(AActor* NewTarget);
+
 	// 非异步 C++ 实现
 	UFUNCTION(BlueprintCallable,CallInEditor)
 	void Voxelize();
@@ -30,14 +33,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	AActor* VoxelizationTarget;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization",meta = (Units = "cm"))
 	float VoxelSize;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	UStaticMesh* VoxelStaticMesh;
 
 	UPROPERTY(EditAnywhere,Blueprintable,Category="Voxelization")
-	TSubclassOf<AActor> ISM_Class;
+	UClass* ISM_Class;
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -63,3 +66,8 @@ private:
 	FVector SnapExtentToVoxelSize(const FVector& Extent) const;
 	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,const FTransform ViewTransform,const UTextureRenderTarget2D* RenderTarget) const;
 };
+
+inline void AVoxelizer::SetTarget(AActor* NewTarget)
+{
+	VoxelizationTarget = NewTarget;
+}
