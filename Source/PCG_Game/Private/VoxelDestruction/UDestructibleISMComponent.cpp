@@ -3,8 +3,12 @@
 
 #include "UDestructibleISMComponent.h"
 
+#include "PooledActor.h"
+#include "Voxelizer.h"
+#include "Kismet/GameplayStatics.h"
+
 TArray<AActor*> UDestructibleISMComponent::RemoveInstancesOverlappingSphere(const FVector& Center, float Radius,
-	bool bSphereInWorldSpace)
+                                                                            bool bSphereInWorldSpace)
 {
 	TArray<AActor*> SpawnedActors;
 	TArray<int32> RemoveInstancesIndexes = GetInstancesOverlappingSphere(Center, Radius, bSphereInWorldSpace);
@@ -69,31 +73,46 @@ TArray<AActor*> UDestructibleISMComponent::RemoveAllInstances()
 			UE_LOG(LogTemp, Error, TEXT("Trying to get a transform at an invalid index"));
 			continue;
 		}
-
-		auto Mesh = GenerateMesh;
-		
-		if (Mesh && GetWorld())
+		if(GetWorld())
 		{
-			FActorSpawnParameters SpawnParameters;
-			AActor* NewActor = GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), Transform);
-			if (NewActor)
-			{
-				UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>(NewActor);
-				if (MeshComponent)
-				{
-					MeshComponent->SetStaticMesh(Mesh);
-					MeshComponent->SetWorldTransform(Transform);
-             
-					MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-					MeshComponent->SetSimulatePhysics(true);
-					
-					NewActor->SetRootComponent(MeshComponent);
-					MeshComponent->RegisterComponent();
-					SpawnedActors.Add(NewActor);
-				}
-			}
-		} 
+			APooledActor* NewActor = VoxelPoolComponent->GetPooledActor();
+			NewActor->SetActorTransform(Transform);
+			SpawnedActors.Add(NewActor);
+		}
+		//
+		// auto Mesh = GenerateMesh;
+		//
+		// if (Mesh && GetWorld())
+		// {
+		// 	FActorSpawnParameters SpawnParameters;
+		// 	AActor* NewActor = GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), Transform);
+		// 	if (NewActor)
+		// 	{
+		// 		UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>(NewActor);
+		// 		if (MeshComponent)
+		// 		{
+		// 			MeshComponent->SetStaticMesh(Mesh);
+		// 			MeshComponent->SetWorldTransform(Transform);
+		//            
+		// 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		// 			MeshComponent->SetSimulatePhysics(true);
+		// 			
+		// 			NewActor->SetRootComponent(MeshComponent);
+		// 			MeshComponent->RegisterComponent();
+		// 			SpawnedActors.Add(NewActor);
+		// 		}
+		// 	}
+		// } 
 	}
 	ClearInstances();
 	return SpawnedActors;
+}
+
+void UDestructibleISMComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+// FOR TEST
+	auto TestActor = UGameplayStatics::GetActorOfClass(GetWorld(),AVoxelizer::StaticClass());
+	VoxelPoolComponent = TestActor->FindComponentByClass<UObjectPoolComponent>();
 }

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "ObjectPoolComponent.h"
 #include "Voxelizer.generated.h"
 
 UCLASS()
@@ -51,6 +52,9 @@ private:
 	
 	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
 	USceneCaptureComponent2D* CaptureComponent;
+
+	UPROPERTY(VisibleAnywhere,Category= "Voxelization")
+	UObjectPoolComponent* ObjectPoolComponent;
 
 private:
 	// 做缓存机制

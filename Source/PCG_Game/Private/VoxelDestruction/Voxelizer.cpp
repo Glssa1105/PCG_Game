@@ -28,6 +28,8 @@ AVoxelizer::AVoxelizer()
 	CaptureComponent->ProjectionType = ECameraProjectionMode::Type::Orthographic;
 	CaptureComponent->CaptureSource = SCS_SceneDepth;
 	CaptureComponent->SetupAttachment(RootComponent);
+
+	ObjectPoolComponent = CreateDefaultSubobject<UObjectPoolComponent>(TEXT("Voxel Pool"));
 }
 
 // Called when the game starts or when spawned
@@ -46,7 +48,6 @@ void AVoxelizer::Tick(float DeltaTime)
 		{
 			CompleteVoxelize();
 			bIsStartVoxelize = false;
-			UE_LOG(LogTemp, Log, TEXT("ReadBackFence Complete"));
 		}
 	}
 }
@@ -115,7 +116,6 @@ bool AVoxelizer::RenderTargetReadBack(bool bFlushImmediately)
 	if (!bFlushImmediately)
 	{
 		ReadBackFence.BeginFence();
-		UE_LOG(LogTemp, Display, TEXT("Start ReadBackFence"));
 	}
 	
 	return true;
