@@ -68,7 +68,6 @@ void UObjectPoolComponent::Init()
 		if (AvailableActors.Num() >= MaxPoolSize) break;
 		
 		APooledActor* NewActor = GetWorld()->SpawnActor<APooledActor>(PooledActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		NewActor->AddToRoot();
 		if(NewActor)
 		{
             NewActor->OnDestroyed.AddDynamic(this, &UObjectPoolComponent::OnPooledActorDestroyed);

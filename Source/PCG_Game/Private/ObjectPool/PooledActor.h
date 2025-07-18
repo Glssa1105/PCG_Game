@@ -9,6 +9,7 @@ class PCG_GAME_API APooledActor : public AActor
 	GENERATED_BODY()
 public:
 	APooledActor();
+	~APooledActor();
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Pooled Actor")
 	void OnPulledFromPool();
@@ -26,5 +27,7 @@ public:
 	float GetLastUseTime() const;
 
 private:
+	void DisableAllPhysics();
+	void EnableAllPhysics();
 	float LastUsedTime = 0.f;
 };
