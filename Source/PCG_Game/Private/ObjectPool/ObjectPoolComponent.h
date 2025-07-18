@@ -38,6 +38,7 @@ public:
 	float RecycleAfterSeconds = 30.f;
 	
 private:
+	// 目前会导致大量错误......
 	void RecycleActor();
 
 	// 外部销毁回调 防止错误

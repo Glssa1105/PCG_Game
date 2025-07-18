@@ -68,6 +68,7 @@ void UObjectPoolComponent::Init()
 		if (AvailableActors.Num() >= MaxPoolSize) break;
 		
 		APooledActor* NewActor = GetWorld()->SpawnActor<APooledActor>(PooledActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+		NewActor->AddToRoot();
 		if(NewActor)
 		{
             NewActor->OnDestroyed.AddDynamic(this, &UObjectPoolComponent::OnPooledActorDestroyed);
@@ -168,17 +169,15 @@ APooledActor* UObjectPoolComponent::GetPooledActor()
 
 void UObjectPoolComponent::ReturnPooledActor(APooledActor* ActorToReturn)
 {
-	if(!IsValid(ActorToReturn)) return;
+	if (!IsValid(ActorToReturn) || ActorToReturn->IsPendingKillPending())
+	{
+		return;
+	}
 	
 	TDoubleLinkedList<int32>::TDoubleLinkedListNode** NodePtr = UsedActorIndexListMap.Find(ActorToReturn);
-	
-	if(NodePtr == nullptr)
+
+	if (NodePtr == nullptr)
 	{
-		if (!ActorToReturn->IsPendingKillPending())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Actor '%s' was not in the Pool. Destroy it rightnow"), *ActorToReturn->GetName());
-			ActorToReturn->Destroy();
-		}
 		return;
 	}
 	
@@ -194,16 +193,30 @@ void UObjectPoolComponent::RecycleActor()
 	while (true)
 	{
 		TDoubleLinkedList<int32>::TDoubleLinkedListNode* HeadNode = UsedActorIndexList.GetHead();
-		if (!HeadNode) break;
+		
+		if (!HeadNode)
+		{
+			break;
+		}
 
 		const int32 OldestIndex = HeadNode->GetValue();
-		if (!AvailableActors.IsValidIndex(OldestIndex) || AvailableActors[OldestIndex] == nullptr)
+		
+		if (!AvailableActors.IsValidIndex(OldestIndex))
 		{
 			UsedActorIndexList.RemoveNode(HeadNode);
 			continue;
 		}
 
 		APooledActor* OldestActor = AvailableActors[OldestIndex];
+		
+		if (!IsValid(OldestActor))
+		{
+
+			UsedActorIndexListMap.Remove(OldestActor); 
+			UsedActorIndexList.RemoveNode(HeadNode);   
+			continue;
+		}
+		
 		if (GetWorld()->GetTimeSeconds() - OldestActor->GetLastUseTime() >= RecycleAfterSeconds)
 		{
 			ReturnPooledActor(OldestActor);
