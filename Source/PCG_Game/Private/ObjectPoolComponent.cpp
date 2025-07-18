@@ -3,7 +3,7 @@
 
 UObjectPoolComponent::UObjectPoolComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UObjectPoolComponent::BeginPlay()
@@ -16,7 +16,8 @@ void UObjectPoolComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                          FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	RecycleActor();
+	// 可能Crash
+	// RecycleActor();
 }
 
 void UObjectPoolComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -116,8 +117,13 @@ APooledActor* UObjectPoolComponent::GetPooledActor()
 			int32 ReuseIndex = UsedActorIndexList.GetHead()->GetValue();
 			UsedActorIndexList.RemoveNode(UsedActorIndexList.GetHead());
 			ActorToProvide = AvailableActors[ReuseIndex];
-			ActorToProvide->OnReuse();
-
+			if (ActorToProvide)
+				ActorToProvide->OnReuse();
+			else
+			{
+				ActorToProvide = GetWorld()->SpawnActor<APooledActor>(PooledActorClass,FVector::ZeroVector,FRotator::ZeroRotator);
+			}
+			
 			UsedActorIndexList.AddTail(ReuseIndex);
 			UsedActorIndexListMap.Add(ActorToProvide,UsedActorIndexList.GetTail());
 		}

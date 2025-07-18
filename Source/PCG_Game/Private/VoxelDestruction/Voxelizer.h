@@ -57,8 +57,13 @@ private:
 	UObjectPoolComponent* ObjectPoolComponent;
 
 private:
-	// 做缓存机制
-	TMap<UStaticMesh*,TArray<FVector>> VoxelizationCache;
+	// Cache
+	FVector TargetOrigin;
+	FVector TargetBoxExtent;
+	UStaticMesh* VoxelizeTargetMesh;
+	TMap<UStaticMesh*,TArray<FTransform>> VoxelizationCache;
+	void VoxelizeCache(TArray<FTransform>* CachePtr) const;
+	
 	TSet<FVector> VoxelCheckSet;
 
 	// 非异步 C++ 实现
@@ -87,5 +92,5 @@ private:
 private:
 	// Help Function
 	FVector SnapExtentToVoxelSize(const FVector& Extent) const;
-	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,const FTransform ViewTransform,const UTextureRenderTarget2D* RenderTarget) const;
+	FVector RTSpaceToWorldSpace(const float Depth,const float X,const float Y,const FTransform& ViewTransform,const UTextureRenderTarget2D* RenderTarget) const;
 };

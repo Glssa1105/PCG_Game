@@ -6,12 +6,11 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetRenderingLibrary.h"
-#include "Kismet/KismetStringLibrary.h"
-#include "Kismet/KismetSystemLibrary.h"
 #include "RHI.h"
 #include "RHICommandList.h"
 #include "Rendering/RenderingCommon.h"
 #include "GlobalShader.h"
+#include "Kismet/KismetStringLibrary.h"
 
 // Sets default values
 AVoxelizer::AVoxelizer()
@@ -52,8 +51,62 @@ void AVoxelizer::Tick(float DeltaTime)
 	}
 }
 
+void AVoxelizer::VoxelizeCache(TArray<FTransform>* CachePtr) const 
+{
+	UE_LOG(LogTemp,Warning,TEXT("UseCache!"));
+	
+	FVector SpawnTransform = VoxelizationTarget->GetActorLocation();
+	AActor* SpawnedActor = GetWorld()->SpawnActor(
+		ISM_Class,&SpawnTransform);
+	
+	if(!SpawnedActor)
+	{
+		UE_LOG(LogTemp,Error,TEXT("Spawn actor failed!"));
+		return ;
+	}
+	
+	UInstancedStaticMeshComponent* ISMComponent = 
+		SpawnedActor->FindComponentByClass<UInstancedStaticMeshComponent>();
+	
+	if(!ISMComponent)
+	{
+		UE_LOG(LogTemp,Error,TEXT("Didn't find UInstancedStaticMeshComponent from %s"),*SpawnedActor->GetName());
+		return;
+	}
+	TArray<FTransform> TargetTransform;
+	for (auto CacheTransform : *CachePtr)
+	{
+		CacheTransform.SetLocation(CacheTransform.GetLocation() + TargetOrigin);
+		TargetTransform.Add(CacheTransform);
+	}
+	ISMComponent->AddInstances(TargetTransform,false,true);
+}
+
 void AVoxelizer::Voxelize()
 {
+	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
+	// Cache
+	auto ComponentArray = VoxelizationTarget->GetComponents();
+	for (auto Component:ComponentArray)
+	{
+		if (Component->GetClass() == UStaticMeshComponent::StaticClass())
+		{
+			if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component))
+			{
+				if (UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh())
+				{
+					VoxelizeTargetMesh = StaticMesh;
+					if (TArray<FTransform>* CachePtr = VoxelizationCache.Find(StaticMesh))
+					{
+						VoxelizeCache(CachePtr);
+						return ;
+					}
+					break;
+				}
+			}
+		}
+	}
+	
 	VoxelCheckSet.Empty();
 	const TArray<FVector> DirectionList = {
 		{1,0,0},
@@ -123,8 +176,8 @@ bool AVoxelizer::RenderTargetReadBack(bool bFlushImmediately)
 
 void AVoxelizer::SetView(const int32 DirectionIndex,const FVector& SampleDirection)
 {
-	FVector TargetOrigin = FVector::ZeroVector;
-	FVector TargetBoxExtent = FVector::ZeroVector;
+	TargetOrigin = FVector::ZeroVector;
+	TargetBoxExtent = FVector::ZeroVector;
 	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
 	FVector SnappedExtent = SnapExtentToVoxelSize(TargetBoxExtent);
 
@@ -224,11 +277,49 @@ void AVoxelizer::BuildInstanceMesh()
 		InstanceTransforms.Add(VoxelTransform);
 	}
 
+
+	// Cache Static Mesh
+	TArray<FTransform>* CachePtr = VoxelizationCache.Find(VoxelizeTargetMesh);
+	if (CachePtr == nullptr)
+	{
+		TArray<FTransform> ForCache;
+		for (FTransform InstanceTransform : InstanceTransforms)
+		{
+			InstanceTransform.SetLocation(InstanceTransform.GetLocation() - TargetOrigin);
+			ForCache.Add(InstanceTransform);
+		}
+		VoxelizationCache.Add(VoxelizeTargetMesh,MoveTemp(ForCache));
+	}
+	
 	ISMComponent->AddInstances(InstanceTransforms,false);
 }
 
 void AVoxelizer::StartVoxelize()
 {
+	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
+	// Cache
+	auto ComponentArray = VoxelizationTarget->GetComponents();
+	for (auto Component:ComponentArray)
+	{
+		if (Component->GetClass() == UStaticMeshComponent::StaticClass())
+		{
+			if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component))
+			{
+				if (UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh())
+				{
+					VoxelizeTargetMesh = StaticMesh;
+					if (TArray<FTransform>* CachePtr = VoxelizationCache.Find(StaticMesh))
+					{
+						VoxelizeCache(CachePtr);
+						return ;
+					}
+					break;
+				}
+			}
+		}
+	}
+	
+	
 	VoxelCheckSet.Empty();
 	const TArray<FVector> DirectionList = {
 		{1,0,0},
@@ -283,7 +374,7 @@ FVector AVoxelizer::SnapExtentToVoxelSize(const FVector& Extent) const
 	return SnapExtent;
 }
 
-FVector AVoxelizer::RTSpaceToWorldSpace(const float Depth, const float X, const float Y, const FTransform ViewTransform,
+FVector AVoxelizer::RTSpaceToWorldSpace(const float Depth, const float X, const float Y, const FTransform& ViewTransform,
 	const UTextureRenderTarget2D* RenderTarget) const
 {
 	if(!RenderTarget)

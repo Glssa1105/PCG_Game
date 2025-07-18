@@ -73,9 +73,15 @@ TArray<AActor*> UDestructibleISMComponent::RemoveAllInstances()
 			UE_LOG(LogTemp, Error, TEXT("Trying to get a transform at an invalid index"));
 			continue;
 		}
+		// Use Object Pool
 		if(GetWorld())
 		{
 			APooledActor* NewActor = VoxelPoolComponent->GetPooledActor();
+			if (!NewActor)
+			{
+				UE_LOG(LogTemp, Error, TEXT("Trying to get a pooledActor failed"));
+				break;
+			}
 			NewActor->SetActorTransform(Transform);
 			SpawnedActors.Add(NewActor);
 		}
