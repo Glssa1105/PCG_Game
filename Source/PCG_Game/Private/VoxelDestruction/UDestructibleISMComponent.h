@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "ObjectPoolComponent.h"
+#include "ObjectPool/ObjectPoolComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "UDestructibleISMComponent.generated.h"
 

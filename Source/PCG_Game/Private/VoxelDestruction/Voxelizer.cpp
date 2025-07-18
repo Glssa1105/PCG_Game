@@ -53,8 +53,6 @@ void AVoxelizer::Tick(float DeltaTime)
 
 void AVoxelizer::VoxelizeCache(TArray<FTransform>* CachePtr) const 
 {
-	UE_LOG(LogTemp,Warning,TEXT("UseCache!"));
-	
 	FVector SpawnTransform = VoxelizationTarget->GetActorLocation();
 	AActor* SpawnedActor = GetWorld()->SpawnActor(
 		ISM_Class,&SpawnTransform);
@@ -99,7 +97,6 @@ void AVoxelizer::Voxelize()
 					if (TArray<FTransform>* CachePtr = VoxelizationCache.Find(StaticMesh))
 					{
 						VoxelizeCache(CachePtr);
-						return ;
 					}
 					break;
 				}
@@ -132,6 +129,58 @@ void AVoxelizer::Voxelize()
 		Sample(DirectionIndex);
 	}
 	BuildInstanceMesh();
+}
+
+void AVoxelizer::StartVoxelize()
+{
+	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
+	// Cache
+	auto ComponentArray = VoxelizationTarget->GetComponents();
+	for (auto Component:ComponentArray)
+	{
+		if (Component->GetClass() == UStaticMeshComponent::StaticClass())
+		{
+			if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component))
+			{
+				if (UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh())
+				{
+					VoxelizeTargetMesh = StaticMesh;
+					if (TArray<FTransform>* CachePtr = VoxelizationCache.Find(StaticMesh))
+					{
+						VoxelizeCache(CachePtr);
+					}
+					break;
+				}
+			}
+		}
+	}
+	
+	
+	VoxelCheckSet.Empty();
+	const TArray<FVector> DirectionList = {
+		{1,0,0},
+		{-1,0,0},
+		{0,1,0},
+		{0,-1,0},
+		{0,0,1},
+		{0,0,-1}
+	};
+
+	RenderTargets.Empty();
+	RawColorsArrays.Empty();
+	ViewTransforms.Empty();
+	
+	RenderTargets.SetNum(DirectionList.Num());
+	RawColorsArrays.SetNum(DirectionList.Num());
+	ViewTransforms.SetNum(DirectionList.Num());
+	
+	for(int32 DirectionIndex =0;DirectionIndex<DirectionList.Num();DirectionIndex++)
+	{
+		SetView(DirectionIndex,DirectionList[DirectionIndex]);
+	}
+	
+	RenderTargetReadBack(false);
+	bIsStartVoxelize = true;
 }
 
 bool AVoxelizer::RenderTargetReadBack(bool bFlushImmediately)
@@ -294,58 +343,6 @@ void AVoxelizer::BuildInstanceMesh()
 	ISMComponent->AddInstances(InstanceTransforms,false);
 }
 
-void AVoxelizer::StartVoxelize()
-{
-	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
-	// Cache
-	auto ComponentArray = VoxelizationTarget->GetComponents();
-	for (auto Component:ComponentArray)
-	{
-		if (Component->GetClass() == UStaticMeshComponent::StaticClass())
-		{
-			if (UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component))
-			{
-				if (UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh())
-				{
-					VoxelizeTargetMesh = StaticMesh;
-					if (TArray<FTransform>* CachePtr = VoxelizationCache.Find(StaticMesh))
-					{
-						VoxelizeCache(CachePtr);
-						return ;
-					}
-					break;
-				}
-			}
-		}
-	}
-	
-	
-	VoxelCheckSet.Empty();
-	const TArray<FVector> DirectionList = {
-		{1,0,0},
-		{-1,0,0},
-		{0,1,0},
-		{0,-1,0},
-		{0,0,1},
-		{0,0,-1}
-	};
-
-	RenderTargets.Empty();
-	RawColorsArrays.Empty();
-	ViewTransforms.Empty();
-	
-	RenderTargets.SetNum(DirectionList.Num());
-	RawColorsArrays.SetNum(DirectionList.Num());
-	ViewTransforms.SetNum(DirectionList.Num());
-	
-	for(int32 DirectionIndex =0;DirectionIndex<DirectionList.Num();DirectionIndex++)
-	{
-		SetView(DirectionIndex,DirectionList[DirectionIndex]);
-	}
-	
-	RenderTargetReadBack(false);
-	bIsStartVoxelize = true;
-}
 
 void AVoxelizer::CompleteVoxelize()
 {

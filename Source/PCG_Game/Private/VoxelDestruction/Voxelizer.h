@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "ObjectPoolComponent.h"
+#include "ObjectPool/ObjectPoolComponent.h"
 #include "Voxelizer.generated.h"
 
 UCLASS()

@@ -3,9 +3,10 @@
 
 #include "UDestructibleISMComponent.h"
 
-#include "PooledActor.h"
 #include "Voxelizer.h"
 #include "Kismet/GameplayStatics.h"
+#include "ObjectPool/PooledActor.h"
+#include "ObjectPool/ObjectPoolComponent.h"
 
 TArray<AActor*> UDestructibleISMComponent::RemoveInstancesOverlappingSphere(const FVector& Center, float Radius,
                                                                             bool bSphereInWorldSpace)
