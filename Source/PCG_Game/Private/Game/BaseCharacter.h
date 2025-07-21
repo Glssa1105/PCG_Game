@@ -1,0 +1,23 @@
+﻿// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "BaseCharacter.generated.h"
+
+UCLASS()
+class PCG_GAME_API ABaseCharacter : public ACharacter
+{
+	GENERATED_BODY()
+
+public:
+	ABaseCharacter();
+
+public:
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	bool IsAttacking();
+
+private:
+	bool bIsAttacking;
+};
