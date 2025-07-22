@@ -18,16 +18,16 @@ struct FWFCTile
     FString TileID;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FString> UpNeighbors;
+    TArray<FString> YposNeighbors;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FString> RightNeighbors;
+    TArray<FString> XnegNeighbors;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FString> DownNeighbors;
+    TArray<FString> YnegNeighbors;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FString> LeftNeighbors;
+    TArray<FString> XposNeighbors;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float Weight = 1.0f;

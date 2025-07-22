@@ -351,10 +351,10 @@ void AWaveFunctionCollapse::ValidateTileConstraints()
         if (Tile.TileID.IsEmpty()) continue;
 
         TArray<TArray<FString>*> NeighborArrays = {
-            const_cast<TArray<FString>*>(&Tile.UpNeighbors),
-            const_cast<TArray<FString>*>(&Tile.RightNeighbors),
-            const_cast<TArray<FString>*>(&Tile.DownNeighbors),
-            const_cast<TArray<FString>*>(&Tile.LeftNeighbors)
+            const_cast<TArray<FString>*>(&Tile.YposNeighbors),
+            const_cast<TArray<FString>*>(&Tile.XnegNeighbors),
+            const_cast<TArray<FString>*>(&Tile.YnegNeighbors),
+            const_cast<TArray<FString>*>(&Tile.XposNeighbors)
         };
         
         for (int32 Dir = 0; Dir < 4; Dir++)
@@ -530,13 +530,13 @@ bool AWaveFunctionCollapse::IsValidNeighbor(const FString& TileID, const FString
     switch (Direction)
     {
         case 0: // 上
-            return Tile.UpNeighbors.Contains(NeighborID);
+            return Tile.YposNeighbors.Contains(NeighborID);
         case 1: // 右
-            return Tile.RightNeighbors.Contains(NeighborID);
+            return Tile.XnegNeighbors.Contains(NeighborID);
         case 2: // 下
-            return Tile.DownNeighbors.Contains(NeighborID);
+            return Tile.YnegNeighbors.Contains(NeighborID);
         case 3: // 左
-            return Tile.LeftNeighbors.Contains(NeighborID);
+            return Tile.XposNeighbors.Contains(NeighborID);
         default:
             return false;
     }
@@ -565,8 +565,8 @@ void AWaveFunctionCollapse::SpawnTileAtPosition(int32 X, int32 Y, const FString&
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
         AWFCTileActor* TileActor = GetWorld()->SpawnActor<AWFCTileActor>(TileActorClass,Position,Rotation,SpawnParams);
-        FVector Scale3D = FVector(TileSize / 100);
-        TileActor->SetActorScale3D(Scale3D);
+        // FVector Scale3D = FVector(TileSize / 100);
+        // TileActor->SetActorScale3D(Scale3D);
         if (TileActor)
         {
             // 设置网格和ID
