@@ -564,7 +564,9 @@ void AWaveFunctionCollapse::SpawnTileAtPosition(int32 X, int32 Y, const FString&
         SpawnParams.Instigator = GetInstigator();
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-        AWFCTileActor* TileActor = GetWorld()->SpawnActor<AWFCTileActor>(TileActorClass, Position, Rotation, SpawnParams);
+        AWFCTileActor* TileActor = GetWorld()->SpawnActor<AWFCTileActor>(TileActorClass,Position,Rotation,SpawnParams);
+        FVector Scale3D = FVector(TileSize / 100);
+        TileActor->SetActorScale3D(Scale3D);
         if (TileActor)
         {
             // 设置网格和ID

@@ -104,7 +104,7 @@ void AWizardCharacter::Input_Attack(const FInputActionValue& InputActionValue)
 		if (!AnimInstance->Montage_IsPlaying(AttackMontage))
 		{
 			CharacterState = ECharacterState::Attacking;
-			AnimInstance->Montage_Play(AttackMontage);
+			AnimInstance->Montage_Play(AttackMontage,2);
 			FOnMontageEnded OnMontageEndedDelegate;
 			OnMontageEndedDelegate.BindUObject(this,&AWizardCharacter::OnAttackMontageEnded);
 			AnimInstance->Montage_SetEndDelegate(OnMontageEndedDelegate,AttackMontage);

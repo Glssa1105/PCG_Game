@@ -13,11 +13,4 @@ class PCG_GAME_API ABaseCharacter : public ACharacter
 
 public:
 	ABaseCharacter();
-
-public:
-	UFUNCTION(BlueprintCallable, Category="Movement")
-	bool IsAttacking();
-
-private:
-	bool bIsAttacking;
 };

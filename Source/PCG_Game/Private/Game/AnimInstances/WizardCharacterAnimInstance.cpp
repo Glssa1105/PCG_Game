@@ -27,5 +27,4 @@ void UWizardCharacterAnimInstance::NativeThreadSafeUpdateAnimation(float DeltaSe
 	GroundSpeed_X = OwningCharacter->GetActorForwardVector() | OwningCharacter->GetVelocity() ;
 	GroundSpeed_Y = OwningCharacter->GetActorRightVector() | OwningCharacter->GetVelocity();
 	bHasAcceleration = OwningMovementComponent->GetCurrentAcceleration().SizeSquared2D()>0.0f;
-	bIsAttacking = OwningCharacter->IsAttacking();
 }

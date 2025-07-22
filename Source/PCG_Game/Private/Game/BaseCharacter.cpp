@@ -13,10 +13,5 @@ ABaseCharacter::ABaseCharacter()
 	GetMesh()->bReceivesDecals = false;
 }
 
-bool ABaseCharacter::IsAttacking()
-{
-	return bIsAttacking;
-}
-
 
 
