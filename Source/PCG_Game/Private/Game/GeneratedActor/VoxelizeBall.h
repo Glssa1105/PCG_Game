@@ -4,19 +4,20 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Fireball.generated.h"
+#include "VoxelDestruction/Voxelizer.h"
+#include "VoxelizeBall.generated.h"
 
 class USphereComponent;
 class UProjectileMovementComponent;
 class UParticleSystemComponent;
 
 UCLASS()
-class PCG_GAME_API AFireballActor : public AActor
+class PCG_GAME_API AVoxelizeBall : public AActor
 {
 	GENERATED_BODY()
 
 public:
-	AFireballActor();
+	AVoxelizeBall();
 
 protected:
 	UFUNCTION()
@@ -31,4 +32,7 @@ private:
     
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UProjectileMovementComponent* ProjectileMovementComponent;
+
+	UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	AVoxelizer* Voxelizer;
 };

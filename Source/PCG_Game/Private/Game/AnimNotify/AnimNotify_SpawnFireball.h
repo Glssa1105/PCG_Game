@@ -4,7 +4,7 @@
 #include "Animation/AnimNotifies/AnimNotify.h"
 #include "AnimNotify_SpawnFireball.generated.h"
 
-class AFireballActor;
+class AVoxelizeBall;
 
 UCLASS()
 class PCG_GAME_API UAnimNotify_SpawnFireball : public UAnimNotify
@@ -16,7 +16,7 @@ public:
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Projectile")
-	TSubclassOf<AFireballActor> FireballClass;
+	TSubclassOf<AVoxelizeBall> FireballClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Projectile")
 	FName SocketName = "Muzzle_01";

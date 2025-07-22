@@ -1,6 +1,6 @@
 ﻿#include "AnimNotify_SpawnFireball.h"
 #include "../WizardCharacter.h"
-#include "../GeneratedActor/FireBall.h"
+#include "../GeneratedActor/VoxelizeBall.h"
 
 void UAnimNotify_SpawnFireball::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation)
 {
@@ -19,5 +19,5 @@ void UAnimNotify_SpawnFireball::Notify(USkeletalMeshComponent* MeshComp, UAnimSe
 	SpawnParams.Owner = MeshComp->GetOwner();
 	SpawnParams.Instigator = Cast<APawn>(MeshComp->GetOwner());
 
-	GetWorld()->SpawnActor<AFireballActor>(FireballClass, SpawnLocation, SpawnRotation, SpawnParams);
+	GetWorld()->SpawnActor<AVoxelizeBall>(FireballClass, SpawnLocation, SpawnRotation, SpawnParams);
 }
