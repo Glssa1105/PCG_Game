@@ -41,13 +41,21 @@ void AWaveFunctionCollapse::GenerateGrid()
 
     InitializeGrid();
     
-    if (SolveWFC())
+    if (!SolveWFC())
     {
-        UE_LOG(LogTemp, Log, TEXT("WFC Generation completed successfully"));
+        UE_LOG(LogTemp, Error, TEXT("WFC Generation failed"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("WFC Generation failed"));
+        if (FallBackSeed.IsEmpty())
+        {
+            UE_LOG(LogTemp, Error, TEXT("No Seed defined in FallBackSeed"));
+        }
+        ClearGrid();
+        int Index = RandomStream.RandRange(0,FallBackSeed.Num());
+        RandomStream.Initialize(FallBackSeed[Index]);
+        InitializeGrid();
+        SolveWFC();
     }
 }
 
@@ -111,7 +119,6 @@ bool AWaveFunctionCollapse::SolveWFC()
             
             if (LowestEntropyPos.X == -1)
             {
-                UE_LOG(LogTemp, Log, TEXT("WFC completed successfully on retry %d"), CurrentRetry + 1);
                 return true;
             }
             
@@ -157,7 +164,15 @@ bool AWaveFunctionCollapse::SolveWFCWithBacktracking()
             if (LowestEntropyPos.X == -1)
             {
                 UE_LOG(LogTemp, Log, TEXT("WFC completed successfully with backtracking"));
-                return true;
+
+                // 连通性测试
+                if (IsConnected())
+                {
+                    return true;
+                }
+                // 生成失败需要重试
+                UE_LOG(LogTemp, Warning, TEXT("Cannot connect, restarting"));
+                break;
             }
             
             if (Grid[LowestEntropyPos.X][LowestEntropyPos.Y].Entropy == 0)
@@ -167,7 +182,6 @@ bool AWaveFunctionCollapse::SolveWFCWithBacktracking()
                 
                 if (RestoreSnapshot())
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Backtracked successfully"));
                     continue;
                 }
                 else
@@ -182,11 +196,6 @@ bool AWaveFunctionCollapse::SolveWFCWithBacktracking()
             
             CollapseCell(LowestEntropyPos.X, LowestEntropyPos.Y);
             PropagateConstraints(LowestEntropyPos.X, LowestEntropyPos.Y);
-            
-            if (HasContradiction())
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Contradiction detected after propagation"));
-            }
         }
         
         // 如果到达这里，说明需要重试
@@ -235,9 +244,6 @@ bool AWaveFunctionCollapse::RestoreSnapshot()
             Cell.bCollapsed = false;
             Cell.SelectedTile = "";
             Cell.Entropy = Cell.PossibleTiles.Num();
-            
-            UE_LOG(LogTemp, Log, TEXT("Removed problematic tile from cell (%d, %d), new entropy: %d"), 
-                   ProblemCell.X, ProblemCell.Y, Cell.Entropy);
         }
     }
     
@@ -249,127 +255,203 @@ void AWaveFunctionCollapse::ClearSnapshots()
     Snapshots.Empty();
 }
 
-bool AWaveFunctionCollapse::HasContradiction() const
+bool AWaveFunctionCollapse::IsConnected() const
 {
-    for (int32 X = 0; X < GridWidth; X++)
+    if (Grid.Num() == 0 || Grid[0].Num() == 0)
     {
-        for (int32 Y = 0; Y < GridHeight; Y++)
+        return false;
+    }
+
+    // BFS Check
+    TSet<FIntPoint> Visited;
+    TQueue<FGridLocation> Queue;
+
+    for (int32 X = 0; X < GridWidth; ++X)
+    {
+        const FWFCCell& StartCell = Grid[X][0];
+        if (StartCell.bCollapsed && TileMap.Contains(StartCell.SelectedTile))
         {
-            const FWFCCell& Cell = Grid[X][Y];
-            if (!Cell.bCollapsed && Cell.Entropy == 0)
+            const FWFCTile& Tile = TileMap[StartCell.SelectedTile];
+            if (Tile.Y_negReachable)
             {
-                return true;
+                Queue.Enqueue(FGridLocation(X, 0));
+                Visited.Add(FIntPoint(X, 0));
             }
         }
     }
-    return false;
-}
 
-void AWaveFunctionCollapse::HandleContradiction()
-{
-    for (int32 X = 0; X < GridWidth; X++)
+    while (!Queue.IsEmpty())
     {
-        for (int32 Y = 0; Y < GridHeight; Y++)
+        FGridLocation CurrentLocation;
+        Queue.Dequeue(CurrentLocation);
+
+        int32 CurrentX = CurrentLocation.X;
+        int32 CurrentY = CurrentLocation.Y;
+
+        const FWFCCell& CurrentCell = Grid[CurrentX][CurrentY];
+        if (!CurrentCell.bCollapsed || !TileMap.Contains(CurrentCell.SelectedTile)) continue;
+
+        const FWFCTile& CurrentTile = TileMap[CurrentCell.SelectedTile];
+        
+        if (CurrentY == GridHeight - 1 && CurrentTile.Y_posReachable)
         {
-            FWFCCell& Cell = Grid[X][Y];
-            if (!Cell.bCollapsed && Cell.Entropy == 0)
+            return true;
+        }
+        
+        TArray<FIntPoint> Neighbors = {
+            FIntPoint(CurrentX, CurrentY + 1), // 上 (Y+)
+            FIntPoint(CurrentX, CurrentY - 1), // 下 (Y-)
+            FIntPoint(CurrentX - 1, CurrentY), // 右 (X-)
+            FIntPoint(CurrentX + 1, CurrentY)  // 左 (X+)
+        };
+        
+        for (int32 i = 0; i < Neighbors.Num(); ++i)
+        {
+            FIntPoint NeighborPos = Neighbors[i];
+
+            if (IsValidPosition(NeighborPos.X, NeighborPos.Y) && !Visited.Contains(NeighborPos))
             {
-                if (bAllowFallbackTiles)
+                const FWFCCell& NeighborCell = Grid[NeighborPos.X][NeighborPos.Y];
+                if (NeighborCell.bCollapsed && TileMap.Contains(NeighborCell.SelectedTile))
                 {
-                    // Fallback最多使用 ，再Fallback第一个
-                    FString FallbackTile = GetFallbackTile(X, Y);
-                    if (!FallbackTile.IsEmpty())
+                    const FWFCTile& NeighborTile = TileMap[NeighborCell.SelectedTile];
+                    bool bCanConnect = false;
+
+                    switch (i)
                     {
-                        Cell.PossibleTiles.Add(FallbackTile);
-                        Cell.Entropy = 1;
-                        UE_LOG(LogTemp, Warning, TEXT("Applied fallback tile %s to cell (%d, %d)"), 
-                               *FallbackTile, X, Y);
+                        case 0: 
+                            bCanConnect = CurrentTile.Y_posReachable && NeighborTile.Y_negReachable;
+                            break;
+                        case 1: 
+                            bCanConnect = CurrentTile.Y_negReachable && NeighborTile.Y_posReachable;
+                            break;
+                        case 2: //
+                            bCanConnect = CurrentTile.X_negReachable && NeighborTile.X_posReachable;
+                            break;
+                        case 3: 
+                            bCanConnect = CurrentTile.X_posReachable && NeighborTile.X_negReachable;
+                            break;
+                    }
+
+                    if (bCanConnect)
+                    {
+                        Visited.Add(NeighborPos);
+                        Queue.Enqueue(FGridLocation(NeighborPos.X, NeighborPos.Y));
                     }
                 }
             }
         }
     }
+    
+    return false;
 }
 
-FString AWaveFunctionCollapse::GetFallbackTile(int32 X, int32 Y)
-{
-    TMap<FString, int32> TileFrequency;
-    
-    for (const FWFCTile& Tile : TileSet)
-    {
-        if (!Tile.TileID.IsEmpty())
-        {
-            TileFrequency.Add(Tile.TileID, 0);
-        }
-    }
-    
-    TArray<FIntPoint> Neighbors = {
-        FIntPoint(X +1 , Y ), FIntPoint(X , Y + 1),
-        FIntPoint(X -1, Y ), FIntPoint(X , Y -1)
-    };
-    
-    for (const FIntPoint& NeighborPos : Neighbors)
-    {
-        if (IsValidPosition(NeighborPos.X, NeighborPos.Y))
-        {
-            const FWFCCell& NeighborCell = Grid[NeighborPos.X][NeighborPos.Y];
-            if (NeighborCell.bCollapsed && !NeighborCell.SelectedTile.IsEmpty())
-            {
-                if (TileFrequency.Contains(NeighborCell.SelectedTile))
-                {
-                    TileFrequency[NeighborCell.SelectedTile]++;
-                }
-            }
-        }
-    }
-    
-    FString BestTile = "";
-    int32 MaxFrequency = -1;
-    
-    for (const auto& Pair : TileFrequency)
-    {
-        if (Pair.Value > MaxFrequency)
-        {
-            MaxFrequency = Pair.Value;
-            BestTile = Pair.Key;
-        }
-    }
-    
-    if (BestTile.IsEmpty() && TileSet.Num() > 0)
-    {
-        BestTile = TileSet[0].TileID;
-    }
-    
-    return BestTile;
-}
+// Fall Back 有错误
+// void AWaveFunctionCollapse::HandleContradiction()
+// {
+//     for (int32 X = 0; X < GridWidth; X++)
+//     {
+//         for (int32 Y = 0; Y < GridHeight; Y++)
+//         {
+//             FWFCCell& Cell = Grid[X][Y];
+//             if (!Cell.bCollapsed && Cell.Entropy == 0)
+//             {
+//                 if (bAllowFallbackTiles)
+//                 {
+//                     // Fallback最多使用 ，再Fallback第一个
+//                     FString FallbackTile = GetFallbackTile(X, Y);
+//                     if (!FallbackTile.IsEmpty())
+//                     {
+//                         Cell.PossibleTiles.Add(FallbackTile);
+//                         Cell.Entropy = 1;
+//                         UE_LOG(LogTemp, Warning, TEXT("Applied fallback tile %s to cell (%d, %d)"), 
+//                                *FallbackTile, X, Y);
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
+//
+// FString AWaveFunctionCollapse::GetFallbackTile(int32 X, int32 Y)
+// {
+//     TMap<FString, int32> TileFrequency;
+//     
+//     for (const FWFCTile& Tile : TileSet)
+//     {
+//         if (!Tile.TileID.IsEmpty())
+//         {
+//             TileFrequency.Add(Tile.TileID, 0);
+//         }
+//     }
+//     
+//     TArray<FIntPoint> Neighbors = {
+//         FIntPoint(X +1 , Y ), FIntPoint(X , Y + 1),
+//         FIntPoint(X -1, Y ), FIntPoint(X , Y -1)
+//     };
+//     
+//     for (const FIntPoint& NeighborPos : Neighbors)
+//     {
+//         if (IsValidPosition(NeighborPos.X, NeighborPos.Y))
+//         {
+//             const FWFCCell& NeighborCell = Grid[NeighborPos.X][NeighborPos.Y];
+//             if (NeighborCell.bCollapsed && !NeighborCell.SelectedTile.IsEmpty())
+//             {
+//                 if (TileFrequency.Contains(NeighborCell.SelectedTile))
+//                 {
+//                     TileFrequency[NeighborCell.SelectedTile]++;
+//                 }
+//             }
+//         }
+//     }
+//     
+//     FString BestTile = "";
+//     int32 MaxFrequency = -1;
+//     
+//     for (const auto& Pair : TileFrequency)
+//     {
+//         if (Pair.Value > MaxFrequency)
+//         {
+//             MaxFrequency = Pair.Value;
+//             BestTile = Pair.Key;
+//         }
+//     }
+//     
+//     if (BestTile.IsEmpty() && TileSet.Num() > 0)
+//     {
+//         BestTile = TileSet[0].TileID;
+//     }
+//     
+//     return BestTile;
+// }
 
 // 检查所有所有规则可用
-void AWaveFunctionCollapse::ValidateTileConstraints()
-{
-    for (const FWFCTile& Tile : TileSet)
-    {
-        if (Tile.TileID.IsEmpty()) continue;
-
-        TArray<TArray<FString>*> NeighborArrays = {
-            const_cast<TArray<FString>*>(&Tile.YposNeighbors),
-            const_cast<TArray<FString>*>(&Tile.XnegNeighbors),
-            const_cast<TArray<FString>*>(&Tile.YnegNeighbors),
-            const_cast<TArray<FString>*>(&Tile.XposNeighbors)
-        };
-        
-        for (int32 Dir = 0; Dir < 4; Dir++)
-        {
-            for (const FString& NeighborID : *NeighborArrays[Dir])
-            {
-                if (!TileMap.Contains(NeighborID))
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("Tile %s references non-existent neighbor %s in direction %d"), 
-                           *Tile.TileID, *NeighborID, Dir);
-                }
-            }
-        }
-    }
-}
+// void AWaveFunctionCollapse::ValidateTileConstraints()
+// {
+//     for (const FWFCTile& Tile : TileSet)
+//     {
+//         if (Tile.TileID.IsEmpty()) continue;
+//
+//         TArray<TArray<FString>*> NeighborArrays = {
+//             const_cast<TArray<FString>*>(&Tile.YposNeighbors),
+//             const_cast<TArray<FString>*>(&Tile.XnegNeighbors),
+//             const_cast<TArray<FString>*>(&Tile.YnegNeighbors),
+//             const_cast<TArray<FString>*>(&Tile.XposNeighbors)
+//         };
+//         
+//         for (int32 Dir = 0; Dir < 4; Dir++)
+//         {
+//             for (const FString& NeighborID : *NeighborArrays[Dir])
+//             {
+//                 if (!TileMap.Contains(NeighborID))
+//                 {
+//                     UE_LOG(LogTemp, Warning, TEXT("Tile %s references non-existent neighbor %s in direction %d"), 
+//                            *Tile.TileID, *NeighborID, Dir);
+//                 }
+//             }
+//         }
+//     }
+// }
 
 FIntPoint AWaveFunctionCollapse::FindLowestEntropyCell()
 {
@@ -409,6 +491,10 @@ FIntPoint AWaveFunctionCollapse::FindLowestEntropyCell()
 void AWaveFunctionCollapse::CollapseCell(int32 X, int32 Y)
 {
     FWFCCell& Cell = Grid[X][Y];
+    if (Cell.bCollapsed)
+    {
+        return;
+    }
     
     if (Cell.PossibleTiles.Num() == 0)
     {
@@ -573,9 +659,7 @@ void AWaveFunctionCollapse::SpawnTileAtPosition(int32 X, int32 Y, const FString&
             TileActor->SetTileMesh(Tile.Mesh);
             TileActor->SetTileID(TileID);
             
-            // 保存引用以便后续清理
             GeneratedTiles.Add(TileActor);
-            
             UE_LOG(LogTemp, Log, TEXT("Spawned tile %s at position (%d, %d)"), *TileID, X, Y);
         }
         else

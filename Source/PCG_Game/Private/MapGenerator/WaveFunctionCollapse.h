@@ -30,6 +30,18 @@ struct FWFCTile
     TArray<FString> XposNeighbors;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool Y_posReachable;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool X_posReachable;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool Y_negReachable;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool X_negReachable;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float Weight = 1.0f;
 
     FWFCTile()
@@ -71,6 +83,18 @@ struct FWFCSnapshot
     {
         LastCollapsedCell = FIntPoint(-1, -1);
     }
+};
+
+USTRUCT()
+struct FGridLocation
+{
+    GENERATED_BODY()
+
+    int32 X;
+    int32 Y;
+
+    FGridLocation() : X(0), Y(0) {}
+    FGridLocation(int32 InX, int32 InY) : X(InX), Y(InY) {}
 };
 
 UCLASS()
@@ -115,8 +139,11 @@ protected:
     int32 MaxRetries = 3;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
-    bool bAllowFallbackTiles = true;
+    TArray<int32> FallBackSeed;
 
+    // Fall Back
+    // UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    // bool bAllowFallbackTiles = true;
 
 private:
     TArray<TArray<FWFCCell>> Grid;
@@ -155,13 +182,17 @@ private:
     bool IsValidPosition(int32 X, int32 Y) const;
     FString SelectRandomTile(const TArray<FString>& PossibleTiles);
     
+    // 回溯用
     void SaveSnapshot(const FIntPoint& LastCollapsedCell);
     bool RestoreSnapshot();
     void ClearSnapshots();
+
+    // 连通性测试 目标为 Y 轴连通，可从一边到另一边
+    bool IsConnected() const;
     
-    bool HasContradiction() const;
-    void HandleContradiction();
-    FString GetFallbackTile(int32 X, int32 Y);
-    void ValidateTileConstraints();
-    
+    // FallBack
+    // void HandleContradiction();
+    // FString GetFallbackTile(int32 X, int32 Y);
+    // void ValidateTileConstraints();
+  
 };
