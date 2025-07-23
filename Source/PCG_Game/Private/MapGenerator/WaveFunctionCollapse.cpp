@@ -50,6 +50,7 @@ void AWaveFunctionCollapse::GenerateGrid()
         if (FallBackSeed.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("No Seed defined in FallBackSeed"));
+            return ;
         }
         ClearGrid();
         int Index = RandomStream.RandRange(0,FallBackSeed.Num());
@@ -511,7 +512,7 @@ void AWaveFunctionCollapse::CollapseCell(int32 X, int32 Y)
     Cell.Entropy = 1;
     SpawnTileAtPosition(X, Y, SelectedTile);
     
-    UE_LOG(LogTemp, Log, TEXT("Collapsed cell (%d, %d) to %s"), X, Y, *SelectedTile);
+    //UE_LOG(LogTemp, Log, TEXT("Collapsed cell (%d, %d) to %s"), X, Y, *SelectedTile);
 }
 
 void AWaveFunctionCollapse::PropagateConstraints(int32 X, int32 Y)
@@ -660,7 +661,7 @@ void AWaveFunctionCollapse::SpawnTileAtPosition(int32 X, int32 Y, const FString&
             TileActor->SetTileID(TileID);
             
             GeneratedTiles.Add(TileActor);
-            UE_LOG(LogTemp, Log, TEXT("Spawned tile %s at position (%d, %d)"), *TileID, X, Y);
+            //UE_LOG(LogTemp, Log, TEXT("Spawned tile %s at position (%d, %d)"), *TileID, X, Y);
         }
         else
         {
