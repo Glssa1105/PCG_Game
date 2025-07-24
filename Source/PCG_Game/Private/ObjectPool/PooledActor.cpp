@@ -30,7 +30,12 @@ void APooledActor::OnReturnedToPool_Implementation()
 
 void APooledActor::OnReuse_Implementation()
 {
-	LastUsedTime = GetWorld()->GetTimeSeconds();
+	SetActorLocation(FVector::Zero());
+	EnableAllPhysics();
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	SetActorTickEnabled(true);
+	LastUsedTime = GetWorld()->GetTimeSeconds(); 
 }
 
 float APooledActor::GetLastUseTime() const

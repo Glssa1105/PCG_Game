@@ -153,7 +153,7 @@ APooledActor* UObjectPoolComponent::GetPooledActor()
 			UsedActorIndexList.AddTail(ReuseIndex);
 			UsedActorIndexListMap.Add(ActorToProvide, UsedActorIndexList.GetTail());
 
-			ActorToProvide->OnPulledFromPool(); 
+			ActorToProvide->OnReuse(); 
 			return ActorToProvide;
 		}
 		else
