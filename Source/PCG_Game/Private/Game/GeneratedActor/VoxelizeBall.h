@@ -23,6 +23,12 @@ protected:
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
+	UFUNCTION(BlueprintCallable)
+	static float GetPowerRatio();
+
+	UFUNCTION(BlueprintCallable)
+	static void SetPowerRatio(float NewPowerRatio);
+
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USphereComponent* SphereComponent;
@@ -35,4 +41,12 @@ private:
 
 	UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	AVoxelizer* Voxelizer;
+
+	UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	float ExplosionRadius;
+
+	UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	float ExplosionStrength;
+	
+	static float PowerRatio;
 };

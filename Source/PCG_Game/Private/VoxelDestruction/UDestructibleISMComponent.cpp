@@ -8,56 +8,47 @@
 #include "ObjectPool/PooledActor.h"
 #include "ObjectPool/ObjectPoolComponent.h"
 
-TArray<AActor*> UDestructibleISMComponent::RemoveInstancesOverlappingSphere(const FVector& Center, float Radius,
-                                                                            bool bSphereInWorldSpace)
+TArray<AActor*> UDestructibleISMComponent::RemoveInstancesOverlappingSphere(const FVector& Center, float Radius, bool bSphereInWorldSpace)
 {
 	TArray<AActor*> SpawnedActors;
-	TArray<int32> RemoveInstancesIndexes = GetInstancesOverlappingSphere(Center, Radius, bSphereInWorldSpace);
-    
-	for (int32 Index : RemoveInstancesIndexes)
-	{
-		FTransform Transform = FTransform::Identity;
-		if (!GetInstanceTransform(Index, Transform, true))
-		{
-			UE_LOG(LogTemp, Error, TEXT("Trying to get a transform at an invalid index"));
-			continue;
-		}
 
-		auto Mesh = GenerateMesh;
-		
-		if (Mesh && GetWorld())
+	const TArray<int32> OverlappingInstancesIndices = GetInstancesOverlappingSphere(Center, Radius, bSphereInWorldSpace);
+
+	if (OverlappingInstancesIndices.IsEmpty())
+	{
+		return SpawnedActors;
+	}
+
+	for (const int32 Index : OverlappingInstancesIndices)
+	{
+		FTransform InstanceTransform;
+		if (GetInstanceTransform(Index, InstanceTransform, true)) // bWorldSpace = true
 		{
-			FActorSpawnParameters SpawnParameters;
-			AActor* NewActor = GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), Transform);
-			if (NewActor)
+			if (VoxelPoolComponent)
 			{
-				UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>(NewActor);
-				if (MeshComponent)
+				APooledActor* NewActor = VoxelPoolComponent->GetPooledActor();
+				if (NewActor)
 				{
-					MeshComponent->SetStaticMesh(Mesh);
-					MeshComponent->SetWorldTransform(Transform);
-             
-					MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-					MeshComponent->SetSimulatePhysics(true);
-					
-					NewActor->SetRootComponent(MeshComponent);
-					MeshComponent->RegisterComponent();
-             
+					NewActor->SetActorTransform(InstanceTransform);
 					SpawnedActors.Add(NewActor);
 				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("Failed to get a pooled actor from VoxelPoolComponent."));
+				}
 			}
-		} 
-	}
-    
-	if (RemoveInstancesIndexes.Num() && !RemoveInstances(RemoveInstancesIndexes))
-	{
-		for (auto Index : RemoveInstancesIndexes)
-		{
-			UE_LOG(LogTemp, Log, TEXT("Try to remove index:%d"),Index);
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("VoxelPoolComponent is null."));
+			}
 		}
-		UE_LOG(LogTemp, Error, TEXT("Remove instances failed!"));
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Could not get instance transform for index: %d"), Index);
+		}
 	}
-    
+	RemoveInstances(OverlappingInstancesIndices);
+
 	return SpawnedActors;
 }
 
@@ -86,30 +77,6 @@ TArray<AActor*> UDestructibleISMComponent::RemoveAllInstances()
 			NewActor->SetActorTransform(Transform);
 			SpawnedActors.Add(NewActor);
 		}
-		//
-		// auto Mesh = GenerateMesh;
-		//
-		// if (Mesh && GetWorld())
-		// {
-		// 	FActorSpawnParameters SpawnParameters;
-		// 	AActor* NewActor = GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), Transform);
-		// 	if (NewActor)
-		// 	{
-		// 		UStaticMeshComponent* MeshComponent = NewObject<UStaticMeshComponent>(NewActor);
-		// 		if (MeshComponent)
-		// 		{
-		// 			MeshComponent->SetStaticMesh(Mesh);
-		// 			MeshComponent->SetWorldTransform(Transform);
-		//            
-		// 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		// 			MeshComponent->SetSimulatePhysics(true);
-		// 			
-		// 			NewActor->SetRootComponent(MeshComponent);
-		// 			MeshComponent->RegisterComponent();
-		// 			SpawnedActors.Add(NewActor);
-		// 		}
-		// 	}
-		// } 
 	}
 	ClearInstances();
 	return SpawnedActors;

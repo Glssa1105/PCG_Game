@@ -52,6 +52,40 @@ void AVoxelizeBall::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
                 break;
             }
         }
+        
+        TArray<FHitResult> HitResults;
+        FVector ExplosionOrigin = Hit.ImpactPoint;
+
+        FCollisionShape SphereShape = FCollisionShape::MakeSphere(ExplosionRadius);
+        bool bHasHit = GetWorld()->SweepMultiByChannel(HitResults, ExplosionOrigin, ExplosionOrigin, FQuat::Identity, ECC_PhysicsBody, SphereShape);
+
+        if (bHasHit)
+        {
+            for (auto& HitResult : HitResults)
+            {
+                UPrimitiveComponent* PhysicsComponent = HitResult.GetComponent();
+                if (PhysicsComponent && PhysicsComponent->IsSimulatingPhysics())
+                {
+                    PhysicsComponent->AddRadialForce(ExplosionOrigin, ExplosionRadius, ExplosionStrength, ERadialImpulseFalloff::RIF_Constant, true);
+                }
+            }
+        }
+        
         Destroy();
     }
 }
+
+
+float AVoxelizeBall::GetPowerRatio()
+{
+    return PowerRatio;
+}
+
+void AVoxelizeBall::SetPowerRatio(float NewPowerRatio)
+{
+    PowerRatio = NewPowerRatio;
+}
+
+float AVoxelizeBall::PowerRatio = 220.f;
+
+
