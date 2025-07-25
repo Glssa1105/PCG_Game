@@ -13,4 +13,7 @@ class PCG_GAME_API UVoxelizableComponent : public UActorComponent
 	GENERATED_BODY()
 public:
 	UVoxelizableComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
+	float VoxelSize;
 };

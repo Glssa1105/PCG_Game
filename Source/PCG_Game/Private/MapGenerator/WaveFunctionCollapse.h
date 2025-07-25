@@ -4,6 +4,8 @@
 #include "WFCTileActor.h"
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
+#include "NavigationSystem.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 #include "WaveFunctionCollapse.generated.h"
 
 USTRUCT(BlueprintType)
@@ -140,6 +142,12 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
     TArray<int32> FallBackSeed;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    bool bGenerateNavMeshAfterGeneration = true; 
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")
+    ANavMeshBoundsVolume* BoundsVolume = nullptr;
 
     // Fall Back
     // UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WFC Settings")

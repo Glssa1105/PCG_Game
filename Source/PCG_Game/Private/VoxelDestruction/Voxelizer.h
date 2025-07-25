@@ -30,8 +30,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	AActor* VoxelizationTarget;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization",meta = (Units = "cm"))
-	float VoxelSize;
+	
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category= "Voxelization")
 	UStaticMesh* VoxelStaticMesh;
@@ -57,6 +56,7 @@ private:
 	UObjectPoolComponent* ObjectPoolComponent;
 
 private:
+	float VoxelSize;
 	// Cache
 	FVector TargetOrigin;
 	FVector TargetBoxExtent;
@@ -65,11 +65,11 @@ private:
 	void VoxelizeCache(TArray<FTransform>* CachePtr) const;
 	
 	TSet<FVector> VoxelCheckSet;
-
+	
 	// 非异步 C++ 实现
 public:
 	UFUNCTION(BlueprintCallable,CallInEditor)
-	void Voxelize();
+	void Voxelize(float TargetVoxelSize);
 private:
 	// 需要异步回读 RenderTarget 否则性能极低
 	bool RenderTargetReadBack(bool bFlushImmediately);
@@ -80,7 +80,7 @@ private:
 	// 异步 C++ 实现
 public:
 	UFUNCTION(BlueprintCallable,CallInEditor)
-	void StartVoxelize();
+	void StartVoxelize(float TargetVoxelSize);
 private:
 	FRenderCommandFence ReadBackFence;
 	bool bIsStartVoxelize = false;

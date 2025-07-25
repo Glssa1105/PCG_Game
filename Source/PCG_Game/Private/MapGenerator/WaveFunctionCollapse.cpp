@@ -43,20 +43,20 @@ void AWaveFunctionCollapse::GenerateGrid()
     
     if (!SolveWFC())
     {
-        UE_LOG(LogTemp, Error, TEXT("WFC Generation failed"));
-    }
-    else
-    {
         if (FallBackSeed.IsEmpty())
         {
             UE_LOG(LogTemp, Error, TEXT("No Seed defined in FallBackSeed"));
             return ;
         }
         ClearGrid();
-        int Index = RandomStream.RandRange(0,FallBackSeed.Num());
+        int Index = RandomStream.RandRange(0,FallBackSeed.Num()-1);
         RandomStream.Initialize(FallBackSeed[Index]);
         InitializeGrid();
-        SolveWFC();
+        if (!SolveWFC())
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to generate map with FallBackSeed"));
+            return ;
+        }
     }
 }
 

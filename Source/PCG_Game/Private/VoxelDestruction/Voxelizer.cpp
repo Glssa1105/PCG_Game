@@ -80,8 +80,9 @@ void AVoxelizer::VoxelizeCache(TArray<FTransform>* CachePtr) const
 	ISMComponent->AddInstances(TargetTransform,false,true);
 }
 
-void AVoxelizer::Voxelize()
+void AVoxelizer::Voxelize(float TargetVoxelSize)
 {
+	VoxelSize = TargetVoxelSize;
 	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
 	// Cache
 	auto ComponentArray = VoxelizationTarget->GetComponents();
@@ -131,8 +132,9 @@ void AVoxelizer::Voxelize()
 	BuildInstanceMesh();
 }
 
-void AVoxelizer::StartVoxelize()
+void AVoxelizer::StartVoxelize(float TargetVoxelSize)
 {
+	VoxelSize = TargetVoxelSize;
 	VoxelizationTarget->GetActorBounds(false,TargetOrigin,TargetBoxExtent);
 	// Cache
 	auto ComponentArray = VoxelizationTarget->GetComponents();

@@ -47,7 +47,7 @@ void AVoxelizeBall::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
                 UE_LOG(LogTemp, Display, TEXT("Voxelize !"));
                 
                 Voxelizer->SetTarget(OtherActor);
-                Voxelizer->StartVoxelize();
+                Voxelizer->StartVoxelize(VoxelizableComponent->VoxelSize);
                 OtherActor->Destroy();
                 break;
             }
